@@ -6,10 +6,7 @@ from datetime import datetime, timedelta
 import socket
 import docker
 from airflow import DAG
-try:
-    from airflow.providers.standard.operators.python import PythonOperator
-except ImportError:
-    from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.python import PythonOperator
 
 default_args = {
     "owner": "airflow",
