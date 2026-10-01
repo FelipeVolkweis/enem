@@ -22,9 +22,7 @@ RUN chmod -R a+rX /opt/spark
 
 # Copy entrypoint script, strip potential CRLF line endings, and ensure executable permissions
 COPY entrypoint.sh /entrypoint.sh
-RUN sed -i 's/\r$//' /entrypoint.sh && \
-    chmod a+rx /entrypoint.sh && \
-    ln -sf /entrypoint.sh /opt/airflow/entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && chmod a+rx /entrypoint.sh
 
 USER airflow
 

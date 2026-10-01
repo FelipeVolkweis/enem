@@ -13,16 +13,14 @@ cat <<EOF > "${PASSWORDS_FILE}"
 EOF
 chmod 600 "${PASSWORDS_FILE}" 2>/dev/null || true
 
-if [ "$#" -gt 0 ]; then
-    if [ "$1" = "airflow" ] && [ "$2" = "standalone" ] || [ "$1" = "standalone" ]; then
-        echo "Running Airflow Database migrations..."
-        airflow db migrate
-    fi
-    exec "$@"
+if [ "$#" -eq 0 ]; then
+    set -- airflow standalone
 fi
 
-echo "Running Airflow Database migrations..."
-airflow db migrate
+if [ "$1" = "airflow" ] && [ "$2" = "standalone" ] || [ "$1" = "standalone" ]; then
+    echo "Running Airflow Database migrations..."
+    airflow db migrate
+fi
 
-echo "Starting Apache Airflow Standalone..."
-exec airflow standalone
+echo "Executing: $@"
+exec "$@"
