@@ -89,6 +89,38 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  airflow:
+    image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.10.5}
+    container_name: enem-airflow
+    restart: unless-stopped
+    ports:
+      - "${AIRFLOW_WEBSERVER_PORT:-8080}:8080"
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      AIRFLOW_ADMIN_USERNAME: ${AIRFLOW_ADMIN_USERNAME:-admin}
+      AIRFLOW_ADMIN_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD:-admin}
+      AIRFLOW_ADMIN_EMAIL: ${AIRFLOW_ADMIN_EMAIL:-admin@example.com}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./jobs:/opt/airflow/jobs
+      - ./data:/opt/airflow/data
+      - ./airflow/entrypoint.sh:/entrypoint.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    group_add:
+      - "${DOCKER_GID:-976}"
+    entrypoint: ["/entrypoint.sh"]
+    networks:
+      - lakehouse-net
+    depends_on:
+      spark:
+        condition: service_started
+      iceberg-rest:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+
 volumes:
   minio_data:
 
