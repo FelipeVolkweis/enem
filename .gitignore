@@ -1,0 +1,9 @@
+# Logs and data
+logs/
+data/
+*.log
+*.pyc
+__pycache__/
+
+# Scratch
+# .scratch is kept for tracking specs/issues
