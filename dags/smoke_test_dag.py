@@ -4,8 +4,9 @@ Airflow Smoke Test DAG for Apache Iceberg & Apache Spark Lakehouse Pipeline.
 
 from datetime import datetime, timedelta
 import socket
-import docker
+
 from airflow import DAG
+from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.providers.standard.operators.python import PythonOperator
 
 default_args = {
@@ -43,37 +44,6 @@ def verify_infrastructure():
     return "All infrastructure services healthy!"
 
 
-def execute_spark_iceberg_job():
-    print("Connecting to Docker daemon to trigger Spark job...")
-    client = docker.from_env()
-    spark_container = client.containers.get("enem-spark")
-
-    cmd = "/opt/spark/bin/spark-submit /opt/spark/jobs/test_iceberg.py"
-    print(f"Executing command inside '{spark_container.name}': {cmd}")
-
-    exec_instance = client.api.exec_create(
-        container=spark_container.id,
-        cmd=cmd,
-        stdout=True,
-        stderr=True,
-    )
-    exec_id = exec_instance["Id"]
-
-    # Stream output in real time to Airflow task logs
-    output_stream = client.api.exec_start(exec_id, stream=True)
-    for chunk in output_stream:
-        print(chunk.decode("utf-8", errors="replace"), end="", flush=True)
-
-    inspect_res = client.api.exec_inspect(exec_id)
-    exit_code = inspect_res.get("ExitCode")
-
-    if exit_code != 0:
-        raise RuntimeError(f"Spark-submit failed with exit code: {exit_code}")
-
-    print("\nSpark Iceberg job executed successfully!")
-    return "SUCCESS"
-
-
 with DAG(
     dag_id="iceberg_lakehouse_smoke_test",
     default_args=default_args,
@@ -89,9 +59,17 @@ with DAG(
         python_callable=verify_infrastructure,
     )
 
-    t2_spark_iceberg = PythonOperator(
+    t2_spark_iceberg = SparkSubmitOperator(
         task_id="run_spark_iceberg_pipeline",
-        python_callable=execute_spark_iceberg_job,
+        application="/opt/airflow/jobs/test_iceberg.py",
+        conn_id="spark_default",
+        deploy_mode="client",
+        properties_file="/opt/spark/conf/spark-defaults.conf",
+        conf={
+            "spark.driver.host": "enem-airflow",
+            "spark.driver.bindAddress": "0.0.0.0",
+        },
+        name="iceberg-verification",
     )
 
     t1_health_check >> t2_spark_iceberg

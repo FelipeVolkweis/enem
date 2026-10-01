@@ -2,8 +2,17 @@ FROM apache/spark:4.1.3
 
 USER root
 
-# Install curl to fetch Iceberg and S3A jars
-RUN apt-get update && apt-get install -y --no-install-recommends curl procps && rm -rf /var/lib/apt/lists/*
+# Install tools, curl, and python3.13 via deadsnakes PPA to match Airflow's Python runtime
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl procps software-properties-common && \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends python3.13 && \
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.13 1 && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PYSPARK_PYTHON=/usr/bin/python3
+ENV PYSPARK_DRIVER_PYTHON=/usr/bin/python3
 
 # Pre-bake required Iceberg and AWS/Hadoop runtime jars
 ENV ICEBERG_VERSION=1.12.0

@@ -10,7 +10,7 @@ Designed for developing local data pipelines and analytical workloads on dataset
 
 | Component | Service Name | Image | Role | Port(s) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Airflow** | `enem-airflow` | `apache/airflow:3.3.2` | Standalone DAG orchestration & workflow scheduling | `8080` (Web UI / API Server) |
+| **Airflow** | `enem-airflow` | `enem-airflow:3.3.2` (based on `apache/airflow:3.3.2`) | Standalone DAG orchestration with the Spark provider and `spark-submit` client | `8080` (Web UI / API Server) |
 | **Spark Engine** | `enem-spark` | `enem-spark:4.1.3` (Custom) | Pre-baked with Iceberg 1.12.0 runtime & Hadoop 3.4 AWS jars; Spark Master & Worker | `8081` (Master UI)<br>`4040` (App UI)<br>`7077` (Cluster Master) |
 | **Iceberg Catalog** | `enem-iceberg-rest` | `tabulario/iceberg-rest:latest` | Open Iceberg REST Catalog managing ACID table commits | `8181` (REST API) |
 | **Object Store** | `enem-minio` | `cgr.dev/chainguard/minio:latest` | S3-compatible local lakehouse storage | `9000` (S3 API)<br>`9001` (Web Console) |
@@ -29,6 +29,7 @@ Designed for developing local data pipelines and analytical workloads on dataset
 │   ├── entrypoint.sh         # Starts Spark Master and Worker daemons
 │   └── spark-defaults.conf   # Pre-configured REST catalog and MinIO S3 credentials
 ├── airflow/
+│   ├── Dockerfile            # Airflow + SparkSubmitOperator provider and Spark client
 │   └── entrypoint.sh         # Standalone Airflow bootloader and credential provisioner
 ├── dags/
 │   └── smoke_test_dag.py     # Verification DAG triggering the Spark Iceberg job
@@ -46,8 +47,9 @@ Designed for developing local data pipelines and analytical workloads on dataset
 ### 1. Start the Stack
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
+*(The `--build` flag builds the customized Airflow image with the Spark provider and submit client, along with `enem-spark` containing the pre-baked Iceberg and Hadoop AWS JARs.)*
 
 ### 2. Verify Services
 
