@@ -1,0 +1,3 @@
+# Ensure Git normalizes line endings and shell scripts always checkout with LF
+* text=auto
+*.sh text eol=lf

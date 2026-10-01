@@ -95,6 +95,7 @@ services:
 
   airflow:
     image: enem-airflow:3.3.2
+    pull_policy: build
     build:
       context: ./airflow
       dockerfile: Dockerfile
@@ -124,8 +125,6 @@ services:
       - ./jobs:/opt/airflow/jobs
       - ./data:/opt/airflow/data
       - ./spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
-      - ./airflow/entrypoint.sh:/entrypoint.sh:ro
-    entrypoint: ["/entrypoint.sh"]
     networks:
       - lakehouse-net
     depends_on:

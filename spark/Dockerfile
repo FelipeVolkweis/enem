@@ -28,7 +28,7 @@ RUN curl -fSL "https://repo1.maven.org/maven2/org/apache/iceberg/iceberg-spark-r
 # Copy default Spark configuration
 COPY spark-defaults.conf /opt/spark/conf/spark-defaults.conf
 COPY entrypoint.sh /opt/spark/entrypoint.sh
-RUN chmod +x /opt/spark/entrypoint.sh
+RUN sed -i 's/\r$//' /opt/spark/entrypoint.sh && chmod +x /opt/spark/entrypoint.sh
 
 # Create jobs and data mount directories with appropriate permissions
 RUN mkdir -p /opt/spark/jobs /opt/spark/data && \

@@ -20,6 +20,12 @@ RUN apt-get update && \
 COPY --from=spark-dist /opt/spark /opt/spark
 RUN chmod -R a+rX /opt/spark
 
+# Copy entrypoint script, strip potential CRLF line endings, and ensure executable permissions
+COPY entrypoint.sh /entrypoint.sh
+RUN sed -i 's/\r$//' /entrypoint.sh && \
+    chmod a+rx /entrypoint.sh && \
+    ln -sf /entrypoint.sh /opt/airflow/entrypoint.sh
+
 USER airflow
 
 # Install Airflow Spark provider pinned to the image's Airflow constraints
@@ -28,3 +34,5 @@ RUN airflow_python_version="$(python -c 'import sys; print(f"{sys.version_info.m
       "apache-airflow==${AIRFLOW_VERSION}" \
       "apache-airflow-providers-apache-spark==6.3.2" \
       --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${airflow_python_version}.txt"
+
+ENTRYPOINT ["/entrypoint.sh"]
