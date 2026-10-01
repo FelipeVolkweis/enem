@@ -16,6 +16,13 @@ Designed for developing local data pipelines and analytical workloads on dataset
 | **Object Store** | `enem-minio` | `cgr.dev/chainguard/minio:latest` | S3-compatible local lakehouse storage | `9000` (S3 API)<br>`9001` (Web Console) |
 | **Bucket Provisioner**| `enem-minio-init` | `cgr.dev/chainguard/minio-client:latest`| Auto-creates `warehouse` bucket on initial boot | — |
 
+### Spark Orchestration & Security Architecture
+
+- **Native Airflow Provider**: Jobs are dispatched via `SparkSubmitOperator` (`apache-airflow-providers-apache-spark`) connecting over the internal Docker network (`lakehouse-net`) to the Spark Master at `spark://spark:7077`.
+- **Zero Host Docker Socket Access**: Airflow runs without mounting `/var/run/docker.sock`, eliminating host-level container breakout risks.
+- **Portability**: No hardcoded `DOCKER_GID` or host user permissions are required; the stack is fully portable across Linux, macOS, and rootless Docker setups.
+- **Client-Mode Networking & Python Parity**: Spark jobs execute with `deploy_mode="client"`, with the driver in `enem-airflow` advertising its resolvable network hostname to workers. Both Airflow and Spark run Python 3.13 to guarantee PySpark serialization parity.
+
 ---
 
 ## 📂 Project Structure
