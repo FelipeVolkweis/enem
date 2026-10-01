@@ -1,6 +1,6 @@
 # ENEM Lakehouse & Data Warehouse Infrastructure
 
-A containerized, local modern Lakehouse/Data Warehouse stack running **Apache Airflow 2.10.5**, **Apache Spark 3.5.3**, **Apache Iceberg (REST Catalog)**, and **MinIO (S3-compatible Object Storage)**.
+A containerized, local modern Lakehouse/Data Warehouse stack running **Apache Airflow 3.3.2**, **Apache Spark 4.1.3**, **Apache Iceberg (REST Catalog with Iceberg 1.12.0)**, and **MinIO (S3-compatible Object Storage)**.
 
 Designed for developing local data pipelines and analytical workloads on datasets such as Brazilian ENEM (Exame Nacional do Ensino Médio) microdata.
 
@@ -10,8 +10,8 @@ Designed for developing local data pipelines and analytical workloads on dataset
 
 | Component | Service Name | Image | Role | Port(s) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Airflow** | `enem-airflow` | `apache/airflow:2.10.5` | Standalone DAG orchestration & workflow scheduling | `8080` (Web UI) |
-| **Spark Engine** | `enem-spark` | `enem-spark:3.5.3` (Custom) | Pre-baked with Iceberg runtime & Hadoop S3A jars; Spark Master & Worker | `8081` (Master UI)<br>`4040` (App UI)<br>`7077` (Cluster Master) |
+| **Airflow** | `enem-airflow` | `apache/airflow:3.3.2` | Standalone DAG orchestration & workflow scheduling | `8080` (Web UI / API Server) |
+| **Spark Engine** | `enem-spark` | `enem-spark:4.1.3` (Custom) | Pre-baked with Iceberg 1.12.0 runtime & Hadoop 3.4 AWS jars; Spark Master & Worker | `8081` (Master UI)<br>`4040` (App UI)<br>`7077` (Cluster Master) |
 | **Iceberg Catalog** | `enem-iceberg-rest` | `tabulario/iceberg-rest:latest` | Open Iceberg REST Catalog managing ACID table commits | `8181` (REST API) |
 | **Object Store** | `enem-minio` | `cgr.dev/chainguard/minio:latest` | S3-compatible local lakehouse storage | `9000` (S3 API)<br>`9001` (Web Console) |
 | **Bucket Provisioner**| `enem-minio-init` | `cgr.dev/chainguard/minio-client:latest`| Auto-creates `warehouse` bucket on initial boot | — |
@@ -25,11 +25,11 @@ Designed for developing local data pipelines and analytical workloads on dataset
 ├── .env                      # Centralized environment variables, credentials, and ports
 ├── docker-compose.yml        # Multi-container lakehouse orchestration
 ├── spark/
-│   ├── Dockerfile            # Spark 3.5.3 + Iceberg & S3A jars pre-baked
+│   ├── Dockerfile            # Spark 4.1.3 + Iceberg 1.12.0 & Hadoop AWS jars pre-baked
 │   ├── entrypoint.sh         # Starts Spark Master and Worker daemons
 │   └── spark-defaults.conf   # Pre-configured REST catalog and MinIO S3 credentials
 ├── airflow/
-│   └── entrypoint.sh         # Standalone Airflow bootloader and user provisioner
+│   └── entrypoint.sh         # Standalone Airflow bootloader and credential provisioner
 ├── dags/
 │   └── smoke_test_dag.py     # Verification DAG triggering the Spark Iceberg job
 ├── jobs/
@@ -82,7 +82,7 @@ docker exec enem-airflow airflow dags trigger iceberg_lakehouse_smoke_test
 
 Monitor the run:
 ```bash
-docker exec enem-airflow airflow dags list-runs -d iceberg_lakehouse_smoke_test
+docker exec enem-airflow airflow dags list-runs iceberg_lakehouse_smoke_test
 ```
 
 ### Option B: Via Airflow Web UI

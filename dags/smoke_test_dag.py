@@ -6,7 +6,10 @@ from datetime import datetime, timedelta
 import socket
 import docker
 from airflow import DAG
-from airflow.operators.python import PythonOperator
+try:
+    from airflow.providers.standard.operators.python import PythonOperator
+except ImportError:
+    from airflow.operators.python import PythonOperator
 
 default_args = {
     "owner": "airflow",
@@ -78,7 +81,7 @@ with DAG(
     dag_id="iceberg_lakehouse_smoke_test",
     default_args=default_args,
     description="Validates end-to-end Airflow -> Spark -> Iceberg REST -> MinIO pipeline",
-    schedule_interval=None,
+    schedule=None,
     start_date=datetime(2026, 1, 1),
     catchup=False,
     tags=["iceberg", "lakehouse", "spark", "enem"],
