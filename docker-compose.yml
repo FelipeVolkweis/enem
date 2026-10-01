@@ -63,6 +63,32 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  spark:
+    build:
+      context: ./spark
+      dockerfile: Dockerfile
+    image: enem-spark:3.5.3
+    container_name: enem-spark
+    environment:
+      SPARK_MODE: master
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      AWS_REGION: us-east-1
+    ports:
+      - "${SPARK_MASTER_PORT}:7077"
+      - "${SPARK_MASTER_WEBUI_PORT}:8081"
+      - "${SPARK_DRIVER_WEBUI_PORT}:4040"
+    volumes:
+      - ./jobs:/opt/spark/jobs
+      - ./data:/opt/spark/data
+    networks:
+      - lakehouse-net
+    depends_on:
+      iceberg-rest:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+
 volumes:
   minio_data:
 
