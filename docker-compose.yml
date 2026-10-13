@@ -69,6 +69,9 @@ services:
   trino:
     image: trinodb/trino:483
     container_name: enem-trino
+    # The stock jvm.config sizes the heap at 80% of visible RAM; without a cgroup cap that means 80% of the
+    # host, and the kernel OOM-kills Trino mid-query on small machines. 3g -> ~2.4 GB heap.
+    mem_limit: 3g
     environment:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}

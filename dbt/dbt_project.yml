@@ -5,10 +5,22 @@ profile: enem
 model-paths: ["models"]
 seed-paths: ["seeds"]
 test-paths: ["tests"]
+macro-paths: ["macros"]
 
 models:
   enem:
+    # dbt_smoke_test fixtures (schema enem_dw)
     staging:
       +materialized: view
+      +tags: [smoke]
     marts:
       +materialized: table
+      +tags: [smoke]
+    # Medallion silver layer: typed, cleaned bronze in iceberg.silver
+    silver:
+      +schema: silver
+      +materialized: table
+
+seeds:
+  enem:
+    +tags: [smoke]

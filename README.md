@@ -35,9 +35,15 @@ Every service uses an upstream image. The only image built locally is a three-li
 │   ├── dbt_project.yml
 │   ├── profiles.yml             # Trino target, catalog `iceberg`, schema `enem_dw`
 │   ├── seeds/
-│   └── models/{staging,marts}/
+│   ├── macros/                  # silver cast helpers, schema naming
+│   ├── tests/silver/            # cross-model data tests
+│   └── models/
+│       ├── sources.yml          # bronze tables
+│       ├── silver/              # medallion silver layer (schema `silver`)
+│       └── {staging,marts}/     # smoke-test fixtures (tag `smoke`)
 ├── dags/
-│   └── dbt_smoke_test_dag.py    # Cosmos DbtDag over the dbt project
+│   ├── enem_medallion_dag.py    # bronze load -> Cosmos DbtTaskGroup for silver
+│   └── dbt_smoke_test_dag.py    # Cosmos DbtDag over the `smoke` models
 ├── data/                        # Mounted at /opt/airflow/data for raw ENEM files
 └── logs/                        # Airflow logs
 ```
@@ -56,6 +62,27 @@ docker compose up -d --build
 | **Trino UI** | <http://localhost:8085> | any username |
 | **MinIO Console** | <http://localhost:9001> | `admin` / `password123` |
 | **Iceberg REST API** | <http://localhost:8181/v1/config> | none |
+
+---
+
+## 🥈 Silver Layer
+
+`enem_medallion` lands the Drive CSVs into `iceberg.bronze` (all varchar), then runs `dbt/models/silver` through a Cosmos task group into `iceberg.silver`:
+
+| Table | Grain | What silver does |
+| :--- | :--- | :--- |
+| `enem_participantes` | participant (2019 + 2024) | Types every column, blanks → NULL, `"42.0"` → `42`, repairs 2019 double-encoded names (`SÃ£o` → `São`), NULLs the 18 cells the 2019 per-state join truncated. `q024`/`q025` exist only for 2019. |
+| `dicionario_questionario` | (year, question, option) | Both questionnaire dictionaries. Q-codes change meaning between years (2019 `q006` = family income, 2024 `q006` = has income), so always join on `nu_ano` + `questao`. |
+| `censo_escolar` | school × census year | Both census layouts unioned by column name (missing → NULL), typed by INEP prefix (`co_/in_/tp_/qt_` int, `dt_` date). |
+
+`enem_participantes.co_escola` joins to `censo_escolar.co_entidade` (the EDA notebook's São Carlos check reproduces: 37 schools in ENEM 2024, 34 found in the census).
+
+```bash
+docker exec enem-airflow airflow dags trigger enem_medallion
+docker exec -it enem-trino trino --execute "select nu_ano, count(*) from iceberg.silver.enem_participantes group by 1"
+```
+
+Trino is capped at `mem_limit: 3g`: its stock JVM config takes 80% of visible RAM, and without a cap the kernel OOM-kills it during the silver builds on small hosts.
 
 ---
 

@@ -2,13 +2,19 @@
 
 bronze: raw CSVs from the project's Google Drive folder land untouched in MinIO
         (s3://<bucket>/bronze/files/), then load as all-string Iceberg tables in `bronze`.
-silver/gold: dbt models (added once the transform notebooks and gold schemas are ported).
+silver: dbt models in dbt/models/silver (typed, cleaned ENEM, questionnaire dictionary and Censo Escolar),
+        run by Cosmos as one task per model plus its tests, in the `silver` schema.
+gold: dbt models (added once the gold schemas are defined).
 """
 
 import os
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from airflow.sdk import dag, get_current_context, task
+from cosmos import DbtTaskGroup, ExecutionConfig, ProfileConfig, ProjectConfig, RenderConfig
+
+DBT_PROJECT_DIR = Path("/opt/airflow/dbt")
 
 # Source folder: https://drive.google.com/drive/folders/1tti3pju4VrofJ79ZCvNQHAApg7_UoU9f
 # The "Microdados Enem 2019 (por estado)" subfolder is a per-UF split of MICRODADOS_ENEM_2019.csv, so it is skipped.
@@ -148,7 +154,20 @@ def enem_medallion():
                     flush(txn)
         print(f"loaded {rows} rows into {identifier}")
 
-    load.expand(landed=land.expand(source=SOURCES))
+    silver = DbtTaskGroup(
+        group_id="silver",
+        project_config=ProjectConfig(DBT_PROJECT_DIR),
+        profile_config=ProfileConfig(
+            profile_name="enem",
+            target_name="dev",
+            profiles_yml_filepath=DBT_PROJECT_DIR / "profiles.yml",
+        ),
+        execution_config=ExecutionConfig(dbt_executable_path="/opt/airflow/dbt_venv/bin/dbt"),
+        # The dictionary check reads two models, so it runs once both are built.
+        render_config=RenderConfig(select=["path:models/silver"], should_detach_multiple_parents_tests=True),
+    )
+
+    load.expand(landed=land.expand(source=SOURCES)) >> silver
 
 
 enem_medallion()
