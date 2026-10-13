@@ -33,6 +33,11 @@
     end
 {%- endmacro %}
 
+{# fato_desempenho_enem's grain: present (tp_presenca = 1) at one test or more; absent is 0, eliminated 2. #}
+{% macro enem_presente(alias) -%}
+    1 in ({{ alias }}.tp_presenca_cn, {{ alias }}.tp_presenca_ch, {{ alias }}.tp_presenca_lc, {{ alias }}.tp_presenca_mt)
+{%- endmacro %}
+
 {# fato_censo_escolar's grain: schools em atividade. INEP 2024 publishes no details for paralisadas/extintas. #}
 {% macro censo_escolas_ativas() -%}
     (select * from {{ ref('stg_censo_escolar__escolas') }} where tp_situacao_funcionamento = 1)
