@@ -2,6 +2,7 @@ services:
   minio:
     image: cgr.dev/chainguard/minio:latest
     container_name: enem-minio
+    mem_limit: ${MINIO_MEM_LIMIT}
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
@@ -44,6 +45,9 @@ services:
   iceberg-rest:
     image: apache/iceberg-rest-fixture:1.10.1
     container_name: enem-iceberg-rest
+    mem_limit: ${ICEBERG_REST_MEM_LIMIT}
+    # The image runs as uid 1000, but a fresh named volume at /catalog is root-owned, so SQLite can't create its file.
+    user: root
     environment:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
@@ -69,9 +73,9 @@ services:
   trino:
     image: trinodb/trino:483
     container_name: enem-trino
-    # The stock jvm.config sizes the heap at 80% of visible RAM; without a cgroup cap that means 80% of the
-    # host, and the kernel OOM-kills Trino mid-query on small machines. 3g -> ~2.4 GB heap.
-    mem_limit: 3g
+    # The JVM heap tops out at 80% of the cap but starts at 10% (trino/etc/jvm.config); queries that outgrow it
+    # spill to /tmp/trino-spill (trino/etc/config.properties) instead of failing.
+    mem_limit: ${TRINO_MEM_LIMIT}
     environment:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
@@ -79,6 +83,8 @@ services:
       - "${TRINO_PORT}:8080"
     volumes:
       - ./trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties:ro
+      - ./trino/etc/config.properties:/etc/trino/config.properties:ro
+      - ./trino/etc/jvm.config:/etc/trino/jvm.config:ro
     networks:
       - lakehouse-net
     healthcheck:
@@ -96,6 +102,7 @@ services:
     image: enem-airflow:3.3.2
     pull_policy: build
     container_name: enem-airflow
+    mem_limit: ${AIRFLOW_MEM_LIMIT}
     command: standalone
     restart: unless-stopped
     ports:
@@ -104,6 +111,8 @@ services:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
       AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT: "120"
+      # LocalExecutor forks one worker per slot (default 32); 2 keeps idle RAM and concurrent dbt/pyarrow tasks within AIRFLOW_MEM_LIMIT.
+      AIRFLOW__CORE__PARALLELISM: "2"
       # Local dev only: every visitor is an admin, no login screen.
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
       # Bronze ingestion: MinIO landing area + Iceberg REST catalog.

@@ -10,4 +10,4 @@ enem:
       http_scheme: http
       catalog: iceberg
       schema: enem_dw
-      threads: 4
+      threads: 2
