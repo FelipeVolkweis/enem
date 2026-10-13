@@ -1,3 +1,5 @@
+{{ config(materialized='table') }}
+
 select
     uf,
     count(*) as students,

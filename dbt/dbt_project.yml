@@ -9,18 +9,17 @@ macro-paths: ["macros"]
 
 models:
   enem:
-    # dbt_smoke_test fixtures (schema enem_dw)
+    # Typed, cleaned bronze sources (the medallion "silver" layer), in iceberg.staging.
+    # Tables rather than views: the cleanup is too heavy to repeat on every downstream read.
     staging:
+      +schema: staging
+      +materialized: table
+    # dbt_smoke_test fixtures, kept apart from the ENEM data (schema enem_dw).
+    smoke:
       +materialized: view
       +tags: [smoke]
-    marts:
-      +materialized: table
-      +tags: [smoke]
-    # Medallion silver layer: typed, cleaned bronze in iceberg.silver
-    silver:
-      +schema: silver
-      +materialized: table
 
 seeds:
   enem:
-    +tags: [smoke]
+    smoke:
+      +tags: [smoke]

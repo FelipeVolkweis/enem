@@ -34,15 +34,17 @@ Every service uses an upstream image. The only image built locally is a three-li
 ├── dbt/                         # dbt project (mounted at /opt/airflow/dbt)
 │   ├── dbt_project.yml
 │   ├── profiles.yml             # Trino target, catalog `iceberg`, schema `enem_dw`
-│   ├── seeds/
-│   ├── macros/                  # silver cast helpers, schema naming
-│   ├── tests/silver/            # cross-model data tests
+│   ├── macros/                  # staging cast helpers, schema naming
+│   ├── tests/staging/           # cross-model data tests
+│   ├── seeds/smoke/             # smoke-test fixture CSV
 │   └── models/
-│       ├── sources.yml          # bronze tables
-│       ├── silver/              # medallion silver layer (schema `silver`)
-│       └── {staging,marts}/     # smoke-test fixtures (tag `smoke`)
+│       ├── staging/             # silver layer: stg_<source>__<entity> (schema `staging`)
+│       │   ├── _sources.yml     # bronze tables
+│       │   ├── enem/
+│       │   └── censo_escolar/
+│       └── smoke/               # smoke-test fixtures (tag `smoke`, schema `enem_dw`)
 ├── dags/
-│   ├── enem_medallion_dag.py    # bronze load -> Cosmos DbtTaskGroup for silver
+│   ├── enem_medallion_dag.py    # bronze load -> Cosmos DbtTaskGroup for staging
 │   └── dbt_smoke_test_dag.py    # Cosmos DbtDag over the `smoke` models
 ├── data/                        # Mounted at /opt/airflow/data for raw ENEM files
 └── logs/                        # Airflow logs
@@ -65,30 +67,30 @@ docker compose up -d --build
 
 ---
 
-## 🥈 Silver Layer
+## 🥈 Silver Layer (dbt staging)
 
-`enem_medallion` lands the Drive CSVs into `iceberg.bronze` (all varchar), then runs `dbt/models/silver` through a Cosmos task group into `iceberg.silver`:
+`enem_medallion` lands the Drive CSVs into `iceberg.bronze` (all varchar), then runs `dbt/models/staging` through a Cosmos task group into `iceberg.staging`. Gold will live in `dbt/models/marts`.
 
-| Table | Grain | What silver does |
+| Table | Grain | What staging does |
 | :--- | :--- | :--- |
-| `enem_participantes` | participant (2019 + 2024) | Types every column, blanks → NULL, `"42.0"` → `42`, repairs 2019 double-encoded names (`SÃ£o` → `São`), NULLs the 18 cells the 2019 per-state join truncated. `q024`/`q025` exist only for 2019. |
-| `dicionario_questionario` | (year, question, option) | Both questionnaire dictionaries. Q-codes change meaning between years (2019 `q006` = family income, 2024 `q006` = has income), so always join on `nu_ano` + `questao`. |
-| `censo_escolar` | school × census year | Both census layouts unioned by column name (missing → NULL), typed by INEP prefix (`co_/in_/tp_/qt_` int, `dt_` date). |
+| `stg_enem__participantes` | participant (2019 + 2024) | Types every column, blanks → NULL, `"42.0"` → `42`, repairs 2019 double-encoded names (`SÃ£o` → `São`), NULLs the 18 cells the 2019 per-state join truncated. `q024`/`q025` exist only for 2019. |
+| `stg_enem__dicionario_questionario` | (year, question, option) | Both questionnaire dictionaries. Q-codes change meaning between years (2019 `q006` = family income, 2024 `q006` = has income), so always join on `nu_ano` + `questao`. |
+| `stg_censo_escolar__escolas` | school × census year | Both census layouts unioned by column name (missing → NULL), typed by INEP prefix (`co_/in_/tp_/qt_` int, `dt_` date). |
 
-`enem_participantes.co_escola` joins to `censo_escolar.co_entidade` (the EDA notebook's São Carlos check reproduces: 37 schools in ENEM 2024, 34 found in the census).
+`stg_enem__participantes.co_escola` joins to `stg_censo_escolar__escolas.co_entidade` (the EDA notebook's São Carlos check reproduces: 37 schools in ENEM 2024, 34 found in the census).
 
 ```bash
 docker exec enem-airflow airflow dags trigger enem_medallion
-docker exec -it enem-trino trino --execute "select nu_ano, count(*) from iceberg.silver.enem_participantes group by 1"
+docker exec -it enem-trino trino --execute "select nu_ano, count(*) from iceberg.staging.stg_enem__participantes group by 1"
 ```
 
-Trino is capped at `mem_limit: 3g`: its stock JVM config takes 80% of visible RAM, and without a cap the kernel OOM-kills it during the silver builds on small hosts.
+Trino is capped at `mem_limit: 3g`: its stock JVM config takes 80% of visible RAM, and without a cap the kernel OOM-kills it during the staging builds on small hosts.
 
 ---
 
 ## 🧪 Smoke Test
 
-`dbt_smoke_test` is a Cosmos `DbtDag`. Each dbt seed, model and test becomes its own Airflow task: seed `smoke_students` → view `stg_students` → table `score_by_uf`, with tests after each model.
+`dbt_smoke_test` is a Cosmos `DbtDag`. Each dbt seed, model and test becomes its own Airflow task: seed `smoke_students` → view `stg_students` → table `score_by_uf` (all under `models/smoke` and `seeds/smoke`), with tests after each model.
 
 ```bash
 docker exec enem-airflow airflow dags trigger dbt_smoke_test

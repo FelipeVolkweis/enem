@@ -1,13 +1,13 @@
 version: 2
 
 models:
-  - name: enem_participantes
+  - name: stg_enem__participantes
     description: >
       ENEM 2019 and 2024 microdata, one row per participant, typed and cleaned from bronze.
       Blanks become NULL, float-formatted codes ("42.0") become integers, and 2019 municipality names
       that were double-encoded ("SÃ£o Carlos") are repaired. 18 rows of 2019 were truncated by the
       per-state join (a cell ending in ";UF" with nothing after it); that cell is set to NULL. q001..q025 hold the answer letters as given;
-      their meaning depends on the year, so decode them with dicionario_questionario on (nu_ano, questao).
+      their meaning depends on the year, so decode them with stg_enem__dicionario_questionario on (nu_ano, questao).
     columns:
       - name: nu_inscricao
         description: Registration number; the 2019 and 2024 ranges do not overlap.
@@ -22,13 +22,13 @@ models:
           - accepted_values:
               arguments: {values: ['M', 'F']}
       - name: co_escola
-        description: INEP school code; joins to censo_escolar.co_entidade. NULL for most participants.
+        description: INEP school code; joins to stg_censo_escolar__escolas.co_entidade. NULL for most participants.
       - name: q024
         description: Only asked in 2019 (has a computer); NULL for 2024.
       - name: q025
         description: Only asked in 2019 (has internet access); NULL for 2024.
 
-  - name: dicionario_questionario
+  - name: stg_enem__dicionario_questionario
     description: Socioeconomic questionnaire questions and answer options, per ENEM edition.
     data_tests:
       - unique:
@@ -37,12 +37,12 @@ models:
       - name: nu_ano
         data_tests: [not_null]
       - name: questao
-        description: Lowercase q-code matching the enem_participantes column (q001..q025).
+        description: Lowercase q-code matching the stg_enem__participantes column (q001..q025).
         data_tests: [not_null]
       - name: alternativa
         data_tests: [not_null]
 
-  - name: censo_escolar
+  - name: stg_censo_escolar__escolas
     description: >
       Censo Escolar (educação básica) 2019 and 2024, one row per school per year. Columns from both
       layouts are kept (NULL where a year lacks them) and typed by INEP prefix: co_/in_/tp_/qt_ integer,
@@ -57,5 +57,5 @@ models:
           - accepted_values:
               arguments: {values: [2019, 2024], quote: false}
       - name: co_entidade
-        description: INEP school code (matches enem_participantes.co_escola).
+        description: INEP school code (matches stg_enem__participantes.co_escola).
         data_tests: [not_null]

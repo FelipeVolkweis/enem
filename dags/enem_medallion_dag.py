@@ -2,9 +2,9 @@
 
 bronze: raw CSVs from the project's Google Drive folder land untouched in MinIO
         (s3://<bucket>/bronze/files/), then load as all-string Iceberg tables in `bronze`.
-silver: dbt models in dbt/models/silver (typed, cleaned ENEM, questionnaire dictionary and Censo Escolar),
-        run by Cosmos as one task per model plus its tests, in the `silver` schema.
-gold: dbt models (added once the gold schemas are defined).
+silver: dbt staging models in dbt/models/staging (typed, cleaned ENEM, questionnaire dictionary and
+        Censo Escolar), run by Cosmos as one task per model plus its tests, in the `staging` schema.
+gold: dbt marts (added once the gold schemas are defined).
 """
 
 import os
@@ -154,8 +154,8 @@ def enem_medallion():
                     flush(txn)
         print(f"loaded {rows} rows into {identifier}")
 
-    silver = DbtTaskGroup(
-        group_id="silver",
+    staging = DbtTaskGroup(
+        group_id="staging",
         project_config=ProjectConfig(DBT_PROJECT_DIR),
         profile_config=ProfileConfig(
             profile_name="enem",
@@ -164,10 +164,10 @@ def enem_medallion():
         ),
         execution_config=ExecutionConfig(dbt_executable_path="/opt/airflow/dbt_venv/bin/dbt"),
         # The dictionary check reads two models, so it runs once both are built.
-        render_config=RenderConfig(select=["path:models/silver"], should_detach_multiple_parents_tests=True),
+        render_config=RenderConfig(select=["path:models/staging"], should_detach_multiple_parents_tests=True),
     )
 
-    load.expand(landed=land.expand(source=SOURCES)) >> silver
+    load.expand(landed=land.expand(source=SOURCES)) >> staging
 
 
 enem_medallion()

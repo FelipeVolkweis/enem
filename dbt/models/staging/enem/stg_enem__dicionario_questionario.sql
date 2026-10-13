@@ -1,7 +1,7 @@
 {#
   Socioeconomic questionnaire dictionary for both editions. The q-codes are not stable across years
   (2019 q006 is family income, 2024 q006 is "do you have an income?"), so always join on nu_ano too.
-  questao is lowercased to match the enem_participantes column names.
+  questao is lowercased to match the stg_enem__participantes column names.
 #}
 
 {% for year in [2019, 2024] %}

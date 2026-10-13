@@ -3,7 +3,7 @@
 {#
   One row per ENEM participant, 2019 + 2024 on the 2024 layout (keep_same_columns), plus q024/q025
   which only 2019 asked. Questionnaire letters are kept as answered: the same q-code means different
-  things each year, so decode them through dicionario_questionario on (nu_ano, questao).
+  things each year, so decode them through stg_enem__dicionario_questionario on (nu_ano, questao).
 #}
 
 {% for year in [2019, 2024] %}
@@ -21,7 +21,7 @@ select
     {{ enem_int('tp_ensino') }} as tp_ensino,
     {{ enem_int('in_treineiro') }} as in_treineiro,
 
-    -- school (joins to censo_escolar.co_entidade)
+    -- school (joins to stg_censo_escolar__escolas.co_entidade)
     {{ enem_int('co_escola') }} as co_escola,
     {{ enem_int('co_municipio_esc') }} as co_municipio_esc,
     {{ fix_mojibake(enem_text('no_municipio_esc')) }} as no_municipio_esc,
