@@ -1,0 +1,14 @@
+name: enem
+version: "1.0.0"
+profile: enem
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+
+models:
+  enem:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

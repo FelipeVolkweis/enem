@@ -1,6 +1,6 @@
 # ENEM Lakehouse & Data Warehouse Infrastructure
 
-A containerized, local modern Lakehouse/Data Warehouse stack running **Apache Airflow 3.3.2**, **Apache Spark 4.1.3**, **Apache Iceberg (REST Catalog with Iceberg 1.12.0)**, and **MinIO (S3-compatible Object Storage)**.
+A containerized local lakehouse running **Apache Airflow 3.3.2** + **Astronomer Cosmos** orchestrating **dbt** on **Trino**, with tables stored as **Apache Iceberg** (REST catalog) on **MinIO**.
 
 Designed for developing local data pipelines and analytical workloads on datasets such as Brazilian ENEM (Exame Nacional do Ensino Médio) microdata.
 
@@ -8,20 +8,15 @@ Designed for developing local data pipelines and analytical workloads on dataset
 
 ## 🏛 Architecture Overview
 
-| Component | Service Name | Image | Role | Port(s) |
+| Component | Container | Image | Role | Host port(s) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Airflow** | `enem-airflow` | `enem-airflow:3.3.2` (based on `apache/airflow:3.3.2`) | Standalone DAG orchestration with the Spark provider and `spark-submit` client | `8080` (Web UI / API Server) |
-| **Spark Engine** | `enem-spark` | `enem-spark:4.1.3` (Custom) | Pre-baked with Iceberg 1.12.0 runtime & Hadoop 3.4 AWS jars; Spark Master & Worker | `8081` (Master UI)<br>`4040` (App UI)<br>`7077` (Cluster Master) |
-| **Iceberg Catalog** | `enem-iceberg-rest` | `tabulario/iceberg-rest:latest` | Open Iceberg REST Catalog managing ACID table commits | `8181` (REST API) |
-| **Object Store** | `enem-minio` | `cgr.dev/chainguard/minio:latest` | S3-compatible local lakehouse storage | `9000` (S3 API)<br>`9001` (Web Console) |
-| **Bucket Provisioner**| `enem-minio-init` | `cgr.dev/chainguard/minio-client:latest`| Auto-creates `warehouse` bucket on initial boot | — |
+| **Airflow** | `enem-airflow` | `apache/airflow:3.3.2` + Cosmos + dbt-trino | Standalone orchestration; Cosmos renders the dbt project as Airflow tasks | `8080` |
+| **Trino** | `enem-trino` | `trinodb/trino:483` | SQL engine for dbt; Iceberg connector pointed at the REST catalog | `8085` |
+| **Iceberg Catalog** | `enem-iceberg-rest` | `apache/iceberg-rest-fixture:1.10.1` | Iceberg REST catalog (SQLite-backed, persisted in a volume) | `8181` |
+| **Object Store** | `enem-minio` | `cgr.dev/chainguard/minio:latest` | S3-compatible storage for Iceberg data/metadata | `9000` (S3), `9001` (console) |
+| **Bucket Provisioner** | `enem-minio-init` | `cgr.dev/chainguard/minio-client:latest` | Creates the `warehouse` bucket on boot | — |
 
-### Spark Orchestration & Security Architecture
-
-- **Native Airflow Provider**: Jobs are dispatched via `SparkSubmitOperator` (`apache-airflow-providers-apache-spark`) connecting over the internal Docker network (`lakehouse-net`) to the Spark Master at `spark://spark:7077`.
-- **Zero Host Docker Socket Access**: Airflow runs without mounting `/var/run/docker.sock`, eliminating host-level container breakout risks.
-- **Portability**: No hardcoded `DOCKER_GID` or host user permissions are required; the stack is fully portable across Linux, macOS, and rootless Docker setups.
-- **Client-Mode Networking & Python Parity**: Spark jobs execute with `deploy_mode="client"`, with the driver in `enem-airflow` advertising its resolvable network hostname to workers. Both Airflow and Spark run Python 3.13 to guarantee PySpark serialization parity.
+Every service uses an upstream image. The only image built locally is a three-line extension of the official Airflow image. It installs `astronomer-cosmos` and puts `dbt-trino` in a separate venv (`/opt/airflow/dbt_venv`), which is the layout Cosmos recommends to keep dbt's dependencies apart from Airflow's.
 
 ---
 
@@ -29,105 +24,68 @@ Designed for developing local data pipelines and analytical workloads on dataset
 
 ```text
 .
-├── .env                      # Centralized environment variables, credentials, and ports
-├── docker-compose.yml        # Multi-container lakehouse orchestration
-├── spark/
-│   ├── Dockerfile            # Spark 4.1.3 + Iceberg 1.12.0 & Hadoop AWS jars pre-baked
-│   ├── entrypoint.sh         # Starts Spark Master and Worker daemons
-│   └── spark-defaults.conf   # Pre-configured REST catalog and MinIO S3 credentials
+├── .env                         # Credentials and host ports
+├── docker-compose.yml
 ├── airflow/
-│   ├── Dockerfile            # Airflow + SparkSubmitOperator provider and Spark client
-│   └── entrypoint.sh         # Standalone Airflow bootloader and credential provisioner
+│   ├── Dockerfile               # FROM apache/airflow + Cosmos + dbt venv
+│   └── requirements.txt
+├── trino/catalog/
+│   └── iceberg.properties       # Trino → Iceberg REST + MinIO
+├── dbt/                         # dbt project (mounted at /opt/airflow/dbt)
+│   ├── dbt_project.yml
+│   ├── profiles.yml             # Trino target, catalog `iceberg`, schema `enem_dw`
+│   ├── seeds/
+│   └── models/{staging,marts}/
 ├── dags/
-│   └── smoke_test_dag.py     # Verification DAG triggering the Spark Iceberg job
-├── jobs/
-│   └── test_iceberg.py       # PySpark verification script (creates table, inserts, verifies)
-├── data/                     # Host mount directory for your raw ENEM CSV/ZIP files
-├── logs/                     # Airflow execution logs
-└── README.md                 # This guide
+│   └── dbt_smoke_test_dag.py    # Cosmos DbtDag over the dbt project
+├── data/                        # Mounted at /opt/airflow/data for raw ENEM files
+└── logs/                        # Airflow logs
 ```
 
 ---
 
 ## 🚀 Quickstart
 
-### 1. Start the Stack
-
 ```bash
 docker compose up -d --build
 ```
-*(The `--build` flag builds the customized Airflow image with the Spark provider and submit client, along with `enem-spark` containing the pre-baked Iceberg and Hadoop AWS JARs.)*
 
-### 2. Verify Services
-
-Check container status:
-```bash
-docker compose ps
-```
-
-All services will show `Up` (with `enem-minio-init` exiting cleanly with `0` after creating the `warehouse` bucket).
-
-### 3. Service Access & Default Credentials
-
-| Service | URL | Default Credentials |
+| Service | URL | Credentials |
 | :--- | :--- | :--- |
-| **Airflow Web UI** | [http://localhost:8080](http://localhost:8080) | Username: `admin`<br>Password: `admin` |
-| **MinIO Console** | [http://localhost:9001](http://localhost:9001) | Username: `admin`<br>Password: `password123` |
-| **MinIO S3 Endpoint**| [http://localhost:9000](http://localhost:9000) | S3 Access: `admin` / `password123` |
-| **Spark Master UI** | [http://localhost:8081](http://localhost:8081) | None |
-| **Iceberg REST API** | [http://localhost:8181/v1/config](http://localhost:8181/v1/config) | None |
+| **Airflow UI** | <http://localhost:8080> | none (local dev: everyone is admin) |
+| **Trino UI** | <http://localhost:8085> | any username |
+| **MinIO Console** | <http://localhost:9001> | `admin` / `password123` |
+| **Iceberg REST API** | <http://localhost:8181/v1/config> | none |
 
 ---
 
-## 🧪 Running the Verification Smoke Test
+## 🧪 Smoke Test
 
-### Option A: Via Airflow CLI
-
-Trigger the verification DAG from inside the Airflow container:
+`dbt_smoke_test` is a Cosmos `DbtDag`. Each dbt seed, model and test becomes its own Airflow task: seed `smoke_students` → view `stg_students` → table `score_by_uf`, with tests after each model.
 
 ```bash
-docker exec enem-airflow airflow dags trigger iceberg_lakehouse_smoke_test
+docker exec enem-airflow airflow dags trigger dbt_smoke_test
+docker exec enem-airflow airflow dags list-runs dbt_smoke_test
 ```
 
-Monitor the run:
-```bash
-docker exec enem-airflow airflow dags list-runs iceberg_lakehouse_smoke_test
-```
-
-### Option B: Via Airflow Web UI
-
-1. Open [http://localhost:8080](http://localhost:8080) in your browser.
-2. Sign in with `admin` / `admin`.
-3. Locate `iceberg_lakehouse_smoke_test` and click the **Trigger DAG** button (Play icon).
-4. Inspect the task logs for `run_spark_iceberg_pipeline` to see the live Iceberg table creation, insert, and select execution.
-
-### Option C: Directly via Spark
-
-Run the PySpark script directly inside the Spark container:
+Check the result in Trino:
 
 ```bash
-docker exec -it enem-spark /opt/spark/bin/spark-submit /opt/spark/jobs/test_iceberg.py
+docker exec -it enem-trino trino --execute "select * from iceberg.enem_dw.score_by_uf"
 ```
 
----
+Run dbt by hand inside the Airflow container:
 
-## 📊 Inspecting Iceberg Data in MinIO
-
-To view the raw Parquet and metadata files written to MinIO:
-1. Open the MinIO Console at [http://localhost:9001](http://localhost:9001) (`admin` / `password123`).
-2. Navigate to **Buckets** -> `warehouse`.
-3. Inspect `enem_dw/smoke_test/data/` (partitioned Parquet files) and `enem_dw/smoke_test/metadata/` (`.metadata.json` and Avro manifest files).
+```bash
+docker exec -it -w /opt/airflow/dbt enem-airflow /opt/airflow/dbt_venv/bin/dbt build --profiles-dir . \
+    --target-path /tmp/dbt/target --log-path /tmp/dbt/logs   # the mount is read-only for the airflow uid
+```
 
 ---
 
 ## 🛑 Stopping and Cleaning Up
 
-- **Stop services** (preserving data):
-  ```bash
-  docker compose down
-  ```
-
-- **Stop services and reset warehouse data**:
-  ```bash
-  docker compose down -v
-  ```
+```bash
+docker compose down      # keep data
+docker compose down -v   # also wipe MinIO data and the Iceberg catalog
+```

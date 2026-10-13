@@ -1,0 +1,13 @@
+enem:
+  target: dev
+  outputs:
+    dev:
+      type: trino
+      method: none
+      user: airflow
+      host: "{{ env_var('TRINO_HOST', 'trino') }}"
+      port: "{{ env_var('TRINO_PORT', '8080') | int }}"
+      http_scheme: http
+      catalog: iceberg
+      schema: enem_dw
+      threads: 4

@@ -7,3 +7,8 @@ __pycache__/
 
 # Scratch
 # .scratch is kept for tracking specs/issues
+
+# dbt
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/

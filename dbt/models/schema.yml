@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: stg_students
+    columns:
+      - name: student_id
+        data_tests: [unique, not_null]
+      - name: score
+        data_tests: [not_null]
+  - name: score_by_uf
+    columns:
+      - name: uf
+        data_tests: [unique, not_null]
