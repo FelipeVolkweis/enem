@@ -169,3 +169,24 @@ models:
           - not_null
           - relationships:
               arguments: {to: ref('dim_questionario'), field: chave_questionario}
+
+  # Aggregates for dashboards
+  - name: agg_desempenho_enem_escola
+    description: >
+      fato_desempenho_enem aggregated to school x ENEM edition x area (cn, ch, lc, mt, redacao and
+      media_geral, the plain average of the five scores for participants present on both days). Only
+      present participants count. chave_escola = 0 holds participants with no school, so summing all
+      rows gives national figures; combine rows as sum(soma_notas) / sum(qt_participantes).
+    data_tests:
+      - no_null_columns
+      - unique:
+          column_name: "cast(chave_escola as varchar) || '|' || cast(ano as varchar) || '|' || co_area"
+    columns:
+      - name: co_area
+        data_tests:
+          - accepted_values:
+              arguments: {values: [cn, ch, lc, mt, redacao, media_geral]}
+      - name: chave_escola
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_escola'), field: chave_escola}
