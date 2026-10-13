@@ -1,8 +1,17 @@
 {#
   Grain: one active school (tp_situacao_funcionamento = 1) in one Censo Escolar year. INEP 2024 publishes
   no details for paralisadas/extintas, so keeping only active schools makes both years comparable; the
-  closed ones are still in dim_escola. A count INEP left blank for an active school stays NULL.
+  closed ones are still in dim_escola. INEP writes no zero enrollment/teacher/class counts: an active
+  school with no regular students (e.g. only complementary activities or AEE) has all three blank, so
+  those blanks are 0.
 #}
+
+{%- set zero_if_blank = [
+    'qt_mat_bas', 'qt_mat_inf', 'qt_mat_fund', 'qt_mat_med', 'qt_mat_prof', 'qt_mat_eja', 'qt_mat_esp',
+    'qt_mat_bas_fem', 'qt_mat_bas_masc', 'qt_mat_bas_branca', 'qt_mat_bas_preta', 'qt_mat_bas_parda', 'qt_mat_bas_indigena',
+    'qt_doc_bas', 'qt_doc_fund', 'qt_doc_med', 'qt_doc_prof', 'qt_doc_eja', 'qt_doc_esp',
+    'qt_tur_bas', 'qt_tur_fund', 'qt_tur_med', 'qt_tur_prof', 'qt_tur_eja', 'qt_tur_esp',
+] %}
 
 select
     e.chave_escola,
@@ -20,14 +29,10 @@ select
     c.qt_prof_psicologo, c.qt_prof_pedagogia, c.qt_prof_secretario, c.qt_prof_seguranca, c.qt_prof_monitores,
     c.qt_prof_gestao, c.qt_prof_assist_social,
 
-    -- enrollments (bas = all of basic education), by level and by sex / race
-    c.qt_mat_bas, c.qt_mat_inf, c.qt_mat_fund, c.qt_mat_med, c.qt_mat_prof, c.qt_mat_eja, c.qt_mat_esp,
-    c.qt_mat_bas_fem, c.qt_mat_bas_masc,
-    c.qt_mat_bas_branca, c.qt_mat_bas_preta, c.qt_mat_bas_parda, c.qt_mat_bas_indigena,
-
-    -- teachers and classes by level
-    c.qt_doc_bas, c.qt_doc_fund, c.qt_doc_med, c.qt_doc_prof, c.qt_doc_eja, c.qt_doc_esp,
-    c.qt_tur_bas, c.qt_tur_fund, c.qt_tur_med, c.qt_tur_prof, c.qt_tur_eja, c.qt_tur_esp
+    -- enrollments (bas = all of basic education, also by sex / race), teachers and classes by level
+    {%- for c in zero_if_blank %}
+    coalesce(c.{{ c }}, 0) as {{ c }}{{ ',' if not loop.last }}
+    {%- endfor %}
 from {{ censo_escolas_ativas() }} c
 join {{ ref('dim_escola') }} e on e.co_escola = c.co_entidade
 join {{ ref('dim_localizacao') }} l on l.co_municipio = c.co_municipio
