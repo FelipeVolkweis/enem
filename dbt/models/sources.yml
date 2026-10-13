@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: Raw CSVs from the project Drive folder, loaded by the enem_medallion DAG (all columns varchar).
+    database: iceberg
+    schema: bronze
+    tables:
+      - name: enem_microdados_2019
+      - name: enem_microdados_2024
+      - name: dicionario_questionario_socioeconomico_2019
+      - name: dicionario_questionario_socioeconomico_2024
+      - name: censo_escolar_2019
+      - name: censo_escolar_2024

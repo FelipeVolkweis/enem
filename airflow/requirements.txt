@@ -1,1 +1,2 @@
 astronomer-cosmos==1.15.1
+pyiceberg[pyarrow]==0.10.0
