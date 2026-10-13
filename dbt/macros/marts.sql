@@ -33,9 +33,19 @@
     end
 {%- endmacro %}
 
-{# fato_desempenho_enem's grain: present (tp_presenca = 1) at one test or more; absent is 0, eliminated 2. #}
-{% macro enem_presente(alias) -%}
-    1 in ({{ alias }}.tp_presenca_cn, {{ alias }}.tp_presenca_ch, {{ alias }}.tp_presenca_lc, {{ alias }}.tp_presenca_mt)
+{#
+  fato_desempenho_enem's grain: present (tp_presenca = 1; absent is 0, eliminated 2) at all four tests,
+  with every score and booklet published, so the fact holds no NULLs.
+#}
+{% macro enem_prova_completa(alias) -%}
+    {%- set required = ['tp_status_redacao', 'nu_nota_comp1', 'nu_nota_comp2', 'nu_nota_comp3',
+                        'nu_nota_comp4', 'nu_nota_comp5', 'nu_nota_redacao'] -%}
+    {%- for area in ['cn', 'ch', 'lc', 'mt'] %}
+    {{ alias }}.tp_presenca_{{ area }} = 1 and {{ alias }}.co_prova_{{ area }} is not null and {{ alias }}.nu_nota_{{ area }} is not null and
+    {%- endfor %}
+    {%- for c in required %}
+    {{ alias }}.{{ c }} is not null{{ ' and' if not loop.last }}
+    {%- endfor %}
 {%- endmacro %}
 
 {# fato_censo_escolar's grain: schools em atividade. INEP 2024 publishes no details for paralisadas/extintas. #}

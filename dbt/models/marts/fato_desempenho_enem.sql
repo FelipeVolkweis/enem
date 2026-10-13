@@ -1,10 +1,10 @@
 {{ config(properties={"partitioning": "ARRAY['chave_data']"}) }}
 
 {#
-  Grain: one participant who sat at least one ENEM test, in one edition. Those absent on both days have
-  no score at all and are left out (they stay in dim_aluno and fato_questionario, since the questionnaire
-  is answered at registration). A participant who missed one day keeps NULL scores for that day's tests,
-  so avg() covers only those who sat each test.
+  Grain: one participant who sat the whole exam (all four tests on both days, essay included) in one
+  ENEM edition, so every score is present. Participants absent on either day, and the few 2019 rows
+  truncated in the source, are left out here. They stay in dim_aluno and fato_questionario, since the
+  questionnaire is answered at registration.
 #}
 
 select
@@ -29,4 +29,4 @@ select
 from {{ ref('stg_enem__participantes') }} p
 join {{ ref('dim_aluno') }} a on a.nu_sequencial = p.nu_inscricao
 left join {{ ref('dim_escola') }} e on e.co_escola = p.co_escola
-where {{ enem_presente('p') }}
+where {{ enem_prova_completa('p') }}

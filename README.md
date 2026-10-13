@@ -96,12 +96,12 @@ A fact constellation: three star schemas sharing `dim_data`, `dim_aluno` and `di
 
 | Fact | Grain | Dimensions |
 | :--- | :--- | :--- |
-| `fato_desempenho_enem` | participant present at ≥ 1 test × ENEM edition (those absent on both days are left out) | aluno, data, escola |
+| `fato_desempenho_enem` | participant who sat the whole exam (both days) × ENEM edition: no NULL scores | aluno, data, escola |
 | `fato_questionario` | participant × question answered × edition (`qt_resposta` = 1) | aluno, escola, data, questionario |
 | `fato_censo_escolar` | active school (`tp_situacao_funcionamento = 1`) × census year | escola, data, localizacao, infraestrutura, tecnologia, profissionais |
 
 - Keys are sequential positive `integer`s ordered by the natural key (`sequential_key` macro), and facts look them up by natural key. `0` is the unknown member, and `chave_data` is `yyyymmdd`.
-- NULLs: dimensions never hold one. Codes (`tp_`/`in_`) use `9`, INEP's own "não sabe / não informado" code, here also meaning "não se aplica" (e.g. `tp_categoria_escola_privada` of a public school). Identifiers use `0` and names `'NÃO INFORMADO'`. Fact measures stay NULL when INEP didn't measure them (a test the participant missed, a blank census count), so `avg()` stays correct.
+- NULLs: dimensions never hold one. Codes (`tp_`/`in_`) use `9`, INEP's own "não sabe / não informado" code, here also meaning "não se aplica" (e.g. `tp_categoria_escola_privada` of a public school). Identifiers use `0` and names `'NÃO INFORMADO'`. Facts have no NULLs either: `fato_desempenho_enem` keeps only participants who sat the whole exam, and blank census enrollment/teacher/class counts are 0 (INEP writes no zero counts).
 - `fato_censo_escolar` keeps only active schools, because INEP 2024 publishes no details for paralisadas/extintas. They still appear in `dim_escola`.
 - An edition is filed under ENEM's first exam day or the census reference date (`enem_data_prova` / `censo_data_referencia` vars in `dbt_project.yml`).
 - `dim_escola` merges ENEM's `*_esc` attributes with the census attributes, and each side fills in for the other, using the latest non-NULL year. `chave_escola = 0` is the "no school informed" row most participants point to.

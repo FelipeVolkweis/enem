@@ -78,7 +78,8 @@ models:
 
   # Facts
   - name: fato_desempenho_enem
-    description: "Grain: one participant who sat at least one test, in one ENEM edition. Attendance, booklet codes and scores (NULL for a test the participant missed)."
+    description: "Grain: one participant who sat the whole exam (both days, all four tests and the essay) in one ENEM edition. Booklet codes and scores, never NULL."
+    data_tests: [no_null_columns]
     columns:
       - name: chave_aluno
         data_tests:
