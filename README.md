@@ -31,7 +31,7 @@ Every service uses an upstream image. The only image built locally is a three-li
 │   └── requirements.txt
 ├── trino/
 │   ├── catalog/iceberg.properties  # Trino → Iceberg REST + MinIO
-│   └── etc/                     # jvm.config (lazy heap) + config.properties (spill to disk)
+│   └── etc/                     # small-host tuning: lazy heap, 1 query at a time, spill
 ├── dbt/                         # dbt project (mounted at /opt/airflow/dbt)
 │   ├── dbt_project.yml
 │   ├── profiles.yml             # Trino target, catalog `iceberg`, schema `enem_dw`
@@ -86,7 +86,7 @@ docker exec enem-airflow airflow dags trigger enem_medallion
 docker exec -it enem-trino trino --execute "select nu_ano, count(*) from iceberg.staging.stg_enem__participantes group by 1"
 ```
 
-Sized for an 8 GB machine: every container has a memory cap in `.env` (`TRINO_MEM_LIMIT=1536m`, `AIRFLOW_MEM_LIMIT=1536m`, `MINIO_MEM_LIMIT=512m`, `ICEBERG_REST_MEM_LIMIT=384m`, about 3.9 GB in total), and the stack never takes more than their sum. Trino overrides two stock files in `trino/etc/`: `jvm.config` starts the heap at 10% of the cap instead of 80%, so idle Trino doesn't hold most of its cap, and `config.properties` turns on spill-to-disk, so joins and aggregations bigger than the heap spill to `/tmp/trino-spill` instead of failing. Airflow runs with `core.parallelism=2` (2 LocalExecutor workers instead of 32), and the bronze load buffers 100k rows per write. dbt uses 2 threads. Apply a changed cap with `docker compose up -d`. Note that recreating the Airflow container resets `airflow standalone`'s SQLite metadata DB (run history), but not the warehouse.
+Sized for an 8 GB machine: every container has a memory cap in `.env` (`TRINO_MEM_LIMIT=1536m`, `AIRFLOW_MEM_LIMIT=1536m`, `MINIO_MEM_LIMIT=512m`, `ICEBERG_REST_MEM_LIMIT=384m`, about 3.9 GB in total), and the stack never takes more than their sum. Trino is tuned for that cap in `trino/etc/`. `jvm.config` starts the heap at 10% of the cap instead of 80%, so idle Trino doesn't hold most of its cap. `resource-groups.json` runs one query at a time and queues the rest, whether they come from dbt threads, Airflow tasks or the CLI, so `config.properties` can give that query 700MB. The same file limits parallelism to 4 threads and 2 Parquet writers, since scans and writes can't spill, and turns on spill-to-disk for joins and aggregations. Keep `TRINO_MEM_LIMIT` at 1.2g or more, or that 700MB no longer fits and Trino won't start. Airflow runs with `core.parallelism=2` (2 LocalExecutor workers instead of 32), and the bronze load buffers 100k rows per write. dbt uses 2 threads. Apply a changed cap with `docker compose up -d`. Note that recreating the Airflow container resets `airflow standalone`'s SQLite metadata DB (run history), but not the warehouse.
 
 ---
 

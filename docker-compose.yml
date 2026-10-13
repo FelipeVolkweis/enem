@@ -73,8 +73,9 @@ services:
   trino:
     image: trinodb/trino:483
     container_name: enem-trino
-    # The JVM heap tops out at 80% of the cap but starts at 10% (trino/etc/jvm.config); queries that outgrow it
-    # spill to /tmp/trino-spill (trino/etc/config.properties) instead of failing.
+    restart: unless-stopped
+    # Small-host tuning in trino/etc: the heap starts at 10% of the cap and tops out at 80% (jvm.config), one
+    # query runs at a time with up to 700MB (resource-groups.json, config.properties), and joins/aggregations spill to disk.
     mem_limit: ${TRINO_MEM_LIMIT}
     environment:
       AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
@@ -85,6 +86,8 @@ services:
       - ./trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties:ro
       - ./trino/etc/config.properties:/etc/trino/config.properties:ro
       - ./trino/etc/jvm.config:/etc/trino/jvm.config:ro
+      - ./trino/etc/resource-groups.properties:/etc/trino/resource-groups.properties:ro
+      - ./trino/etc/resource-groups.json:/etc/trino/resource-groups.json:ro
     networks:
       - lakehouse-net
     healthcheck:
