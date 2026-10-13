@@ -78,9 +78,32 @@ models:
 
   # Facts
   - name: fato_desempenho_enem
-    description: "Grain: one participant who sat the whole exam (both days, all four tests and the essay) in one ENEM edition. Booklet codes and scores, never NULL."
+    description: >
+      Grain: one participation in one ENEM edition, absentees included. A missed test has score 0,
+      booklet 0 and essay status 0 ("ausente"), so filter score analyses on tp_presenca_<area> = 1
+      (essay: tp_presenca_lc = 1). Never NULL.
     data_tests: [no_null_columns]
     columns:
+      - name: tp_presenca_cn
+        description: "0 = absent, 1 = present, 2 = eliminated. Scores of this test are 0 unless 1."
+        data_tests:
+          - accepted_values:
+              arguments: {values: [0, 1, 2], quote: false}
+      - name: tp_presenca_ch
+        description: "0 = absent, 1 = present, 2 = eliminated. Scores of this test are 0 unless 1."
+        data_tests:
+          - accepted_values:
+              arguments: {values: [0, 1, 2], quote: false}
+      - name: tp_presenca_lc
+        description: "0 = absent, 1 = present, 2 = eliminated. Scores of this test are 0 unless 1."
+        data_tests:
+          - accepted_values:
+              arguments: {values: [0, 1, 2], quote: false}
+      - name: tp_presenca_mt
+        description: "0 = absent, 1 = present, 2 = eliminated. Scores of this test are 0 unless 1."
+        data_tests:
+          - accepted_values:
+              arguments: {values: [0, 1, 2], quote: false}
       - name: chave_aluno
         data_tests:
           - unique

@@ -97,12 +97,12 @@ A fact constellation: three star schemas sharing `dim_data`, `dim_aluno` and `di
 
 | Fact | Grain | Dimensions |
 | :--- | :--- | :--- |
-| `fato_desempenho_enem` | participant who sat the whole exam (both days) × ENEM edition: no NULL scores | aluno, data, escola |
+| `fato_desempenho_enem` | participation × ENEM edition, absentees included (missed test → score 0) | aluno, data, escola |
 | `fato_questionario` | participant × question answered × edition (`qt_resposta` = 1) | aluno, escola, data, questionario |
 | `fato_censo_escolar` | active school (`tp_situacao_funcionamento = 1`) × census year | escola, data, localizacao, infraestrutura, tecnologia, profissionais |
 
 - Keys are sequential positive `integer`s ordered by the natural key (`sequential_key` macro), and facts look them up by natural key. `0` is the unknown member, and `chave_data` is `yyyymmdd`.
-- NULLs: dimensions never hold one. Codes (`tp_`/`in_`) use `9`, INEP's own "não sabe / não informado" code, here also meaning "não se aplica" (e.g. `tp_categoria_escola_privada` of a public school). Identifiers use `0` and names `'NÃO INFORMADO'`. Facts have no NULLs either: `fato_desempenho_enem` keeps only participants who sat the whole exam, and blank census enrollment/teacher/class counts are 0 (INEP writes no zero counts).
+- NULLs: dimensions never hold one. Codes (`tp_`/`in_`) use `9`, INEP's own "não sabe / não informado" code, here also meaning "não se aplica" (e.g. `tp_categoria_escola_privada` of a public school). Identifiers use `0` and names `'NÃO INFORMADO'`. Facts have no NULLs either. In `fato_desempenho_enem` a missed test scores 0 (booklet 0, essay status 0 = "ausente"), so filter score analyses on `tp_presenca_<area> = 1` (essay: `tp_presenca_lc = 1`). A plain `avg()` counts absentees as 0, and real zeros exist (blank essays). Blank census enrollment/teacher/class counts are 0, since INEP writes no zero counts.
 - `fato_censo_escolar` keeps only active schools, because INEP 2024 publishes no details for paralisadas/extintas. They still appear in `dim_escola`.
 - An edition is filed under ENEM's first exam day or the census reference date (`enem_data_prova` / `censo_data_referencia` vars in `dbt_project.yml`).
 - `dim_escola` merges ENEM's `*_esc` attributes with the census attributes, and each side fills in for the other, using the latest non-NULL year. `chave_escola = 0` is the "no school informed" row most participants point to.
@@ -113,7 +113,7 @@ A fact constellation: three star schemas sharing `dim_data`, `dim_aluno` and `di
 docker exec -it enem-trino trino --execute "
   select d.ano, e.sg_uf_esc, avg(f.nu_nota_mt) from iceberg.marts.fato_desempenho_enem f
   join iceberg.marts.dim_data d using (chave_data) join iceberg.marts.dim_escola e using (chave_escola)
-  where f.chave_escola <> 0 group by 1, 2 order by 1, 2"
+  where f.chave_escola <> 0 and f.tp_presenca_mt = 1 group by 1, 2 order by 1, 2"
 ```
 
 ---

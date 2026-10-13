@@ -1,10 +1,11 @@
 {{ config(properties={"partitioning": "ARRAY['chave_data']"}) }}
 
 {#
-  Grain: one participant who sat the whole exam (all four tests on both days, essay included) in one
-  ENEM edition, so every score is present. Participants absent on either day, and the few 2019 rows
-  truncated in the source, are left out here. They stay in dim_aluno and fato_questionario, since the
-  questionnaire is answered at registration.
+  Grain: one participation of a participant in one ENEM edition, absentees included. A test the
+  participant missed (tp_presenca_* 0 = absent, 2 = eliminated) has score 0, booklet 0 and, for the
+  essay, tp_status_redacao 0 ("ausente", a code ENEM does not use). A real 0 also exists among present
+  participants (e.g. a blank essay, tp_status_redacao 4), so analyses of scores filter on
+  tp_presenca_<area> = 1 (essay: tp_presenca_lc = 1); a plain avg() would count absentees as 0.
 #}
 
 select
@@ -15,17 +16,18 @@ select
     {% for area in ['cn', 'ch', 'lc', 'mt'] -%}
     p.tp_presenca_{{ area }},
     {% endfor -%}
+    -- int_enem__participacoes_validas guarantees a NULL here only for a missed test
     {% for area in ['cn', 'ch', 'lc', 'mt'] -%}
-    p.co_prova_{{ area }},
+    coalesce(p.co_prova_{{ area }}, 0) as co_prova_{{ area }},
     {% endfor -%}
     {% for area in ['cn', 'ch', 'lc', 'mt'] -%}
-    p.nu_nota_{{ area }},
+    coalesce(p.nu_nota_{{ area }}, 0) as nu_nota_{{ area }},
     {% endfor -%}
-    p.tp_status_redacao,
+    coalesce(p.tp_status_redacao, 0) as tp_status_redacao,
     {% for i in range(1, 6) -%}
-    p.nu_nota_comp{{ i }},
+    coalesce(p.nu_nota_comp{{ i }}, 0) as nu_nota_comp{{ i }},
     {% endfor -%}
-    p.nu_nota_redacao
-from {{ ref('int_enem__provas_completas') }} p
+    coalesce(p.nu_nota_redacao, 0) as nu_nota_redacao
+from {{ ref('int_enem__participacoes_validas') }} p
 join {{ ref('dim_aluno') }} a on a.nu_sequencial = p.nu_inscricao
 left join {{ ref('dim_escola') }} e on e.co_escola = p.co_escola
