@@ -29,12 +29,13 @@ Every service uses an upstream image. The only image built locally is a three-li
 ├── airflow/
 │   ├── Dockerfile               # FROM apache/airflow + Cosmos + dbt venv
 │   └── requirements.txt
-├── trino/catalog/
-│   └── iceberg.properties       # Trino → Iceberg REST + MinIO
+├── trino/
+│   ├── catalog/iceberg.properties  # Trino → Iceberg REST + MinIO
+│   └── etc/                     # jvm.config (lazy heap) + config.properties (spill to disk)
 ├── dbt/                         # dbt project (mounted at /opt/airflow/dbt)
 │   ├── dbt_project.yml
 │   ├── profiles.yml             # Trino target, catalog `iceberg`, schema `enem_dw`
-│   ├── macros/                  # staging cast helpers, schema naming
+│   ├── macros/                  # staging cast helpers, mart keys, schema naming
 │   ├── tests/staging/           # cross-model data tests
 │   ├── seeds/smoke/             # smoke-test fixture CSV
 │   └── models/
@@ -42,9 +43,10 @@ Every service uses an upstream image. The only image built locally is a three-li
 │       │   ├── _sources.yml     # bronze tables
 │       │   ├── enem/
 │       │   └── censo_escolar/
+│       ├── marts/               # gold layer: dim_* / fato_* constellation (schema `marts`)
 │       └── smoke/               # smoke-test fixtures (tag `smoke`, schema `enem_dw`)
 ├── dags/
-│   ├── enem_medallion_dag.py    # bronze load -> Cosmos DbtTaskGroup for staging
+│   ├── enem_medallion_dag.py    # bronze load -> Cosmos task groups for staging, then marts
 │   └── dbt_smoke_test_dag.py    # Cosmos DbtDag over the `smoke` models
 ├── data/                        # Mounted at /opt/airflow/data for raw ENEM files
 └── logs/                        # Airflow logs
@@ -69,7 +71,7 @@ docker compose up -d --build
 
 ## 🥈 Silver Layer (dbt staging)
 
-`enem_medallion` lands the Drive CSVs into `iceberg.bronze` (all varchar), then runs `dbt/models/staging` through a Cosmos task group into `iceberg.staging`. Gold will live in `dbt/models/marts`.
+`enem_medallion` lands the Drive CSVs into `iceberg.bronze` (all varchar), then runs `dbt/models/staging` through a Cosmos task group into `iceberg.staging`, and `dbt/models/marts` into `iceberg.marts` (see Gold below).
 
 | Table | Grain | What staging does |
 | :--- | :--- | :--- |
@@ -84,7 +86,32 @@ docker exec enem-airflow airflow dags trigger enem_medallion
 docker exec -it enem-trino trino --execute "select nu_ano, count(*) from iceberg.staging.stg_enem__participantes group by 1"
 ```
 
-Trino is capped at `mem_limit: 3g`: its stock JVM config takes 80% of visible RAM, and without a cap the kernel OOM-kills it during the staging builds on small hosts.
+Sized for an 8 GB machine: every container has a memory cap in `.env` (`TRINO_MEM_LIMIT=1536m`, `AIRFLOW_MEM_LIMIT=1536m`, `MINIO_MEM_LIMIT=512m`, `ICEBERG_REST_MEM_LIMIT=384m`, about 3.9 GB in total), and the stack never takes more than their sum. Trino overrides two stock files in `trino/etc/`: `jvm.config` starts the heap at 10% of the cap instead of 80%, so idle Trino doesn't hold most of its cap, and `config.properties` turns on spill-to-disk, so joins and aggregations bigger than the heap spill to `/tmp/trino-spill` instead of failing. Airflow runs with `core.parallelism=2` (2 LocalExecutor workers instead of 32), and the bronze load buffers 100k rows per write. dbt uses 2 threads. Apply a changed cap with `docker compose up -d`. Note that recreating the Airflow container resets `airflow standalone`'s SQLite metadata DB (run history), but not the warehouse.
+
+---
+
+## 🥇 Gold Layer (dbt marts)
+
+A fact constellation: three star schemas sharing `dim_data`, `dim_aluno` and `dim_escola` (from *Esquemas Estrela: ENEM e INEP*).
+
+| Fact | Grain | Dimensions |
+| :--- | :--- | :--- |
+| `fato_desempenho_enem` | participant × ENEM edition | aluno, data, escola |
+| `fato_questionario` | participant × question answered × edition (`qt_resposta` = 1) | aluno, escola, data, questionario |
+| `fato_censo_escolar` | school × census year | escola, data, localizacao, infraestrutura, tecnologia, profissionais |
+
+- Keys are deterministic xxhash64 hashes of the natural key (`surrogate_key` macro), so facts never join back to dimensions. `chave_data` is `yyyymmdd`.
+- An edition is filed under ENEM's first exam day or the census reference date (`enem_data_prova` / `censo_data_referencia` vars in `dbt_project.yml`).
+- `dim_escola` merges ENEM's `*_esc` attributes with the census attributes (latest year of each). `chave_escola = -1` is the "no school informed" row most participants point to.
+- `dim_infraestrutura`, `dim_tecnologia` and `dim_profissionais` are junk dimensions: one row per distinct combination of their indicators.
+- `dim_aluno.nu_sequencial` holds `NU_INSCRICAO`, since the microdata has no `NU_SEQUENCIAL`. `dim_localizacao`'s intermediate/immediate geographic regions exist only in the 2024 census.
+
+```bash
+docker exec -it enem-trino trino --execute "
+  select d.ano, e.sg_uf_esc, avg(f.nu_nota_mt) from iceberg.marts.fato_desempenho_enem f
+  join iceberg.marts.dim_data d using (chave_data) join iceberg.marts.dim_escola e using (chave_escola)
+  where f.chave_escola <> -1 group by 1, 2 order by 1, 2"
+```
 
 ---
 

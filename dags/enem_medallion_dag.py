@@ -4,7 +4,8 @@ bronze: raw CSVs from the project's Google Drive folder land untouched in MinIO
         (s3://<bucket>/bronze/files/), then load as all-string Iceberg tables in `bronze`.
 silver: dbt staging models in dbt/models/staging (typed, cleaned ENEM, questionnaire dictionary and
         Censo Escolar), run by Cosmos as one task per model plus its tests, in the `staging` schema.
-gold: dbt marts (added once the gold schemas are defined).
+gold: dbt marts in dbt/models/marts, the ENEM + Censo Escolar fact constellation (three star schemas
+      sharing dim_data, dim_aluno and dim_escola), in the `marts` schema.
 """
 
 import os
@@ -35,7 +36,7 @@ SOURCES = [
 
 BRONZE_NAMESPACE = "bronze"
 BUCKET = os.environ.get("WAREHOUSE_BUCKET", "warehouse")
-LOAD_BATCH_ROWS = 500_000
+LOAD_BATCH_ROWS = 100_000  # rows buffered per Iceberg write; bounds the load task's memory
 
 
 def _s3fs():
@@ -76,7 +77,7 @@ def _catalog():
 )
 def enem_medallion():
     # Mapped task instances are labelled with the source file name instead of a bare index.
-    @task(max_active_tis_per_dag=3, map_index_template="{{ file_name }}")
+    @task(max_active_tis_per_dag=2, map_index_template="{{ file_name }}")
     def land(source: dict) -> dict:
         """Stream one Drive file, byte for byte, into the bronze landing area in MinIO."""
         get_current_context()["file_name"] = source["file"]
@@ -139,7 +140,7 @@ def enem_medallion():
             reader = csv.open_csv(
                 stream,
                 read_options=csv.ReadOptions(
-                    column_names=columns, skip_rows=1, encoding=landed["encoding"], block_size=64 << 20
+                    column_names=columns, skip_rows=1, encoding=landed["encoding"], block_size=16 << 20
                 ),
                 parse_options=csv.ParseOptions(delimiter=landed["delimiter"]),
                 convert_options=csv.ConvertOptions(column_types={c: pa.string() for c in columns}),
@@ -154,20 +155,21 @@ def enem_medallion():
                     flush(txn)
         print(f"loaded {rows} rows into {identifier}")
 
-    staging = DbtTaskGroup(
-        group_id="staging",
-        project_config=ProjectConfig(DBT_PROJECT_DIR),
-        profile_config=ProfileConfig(
-            profile_name="enem",
-            target_name="dev",
-            profiles_yml_filepath=DBT_PROJECT_DIR / "profiles.yml",
-        ),
-        execution_config=ExecutionConfig(dbt_executable_path="/opt/airflow/dbt_venv/bin/dbt"),
-        # The dictionary check reads two models, so it runs once both are built.
-        render_config=RenderConfig(select=["path:models/staging"], should_detach_multiple_parents_tests=True),
-    )
+    def dbt_layer(path: str) -> DbtTaskGroup:
+        return DbtTaskGroup(
+            group_id=path.split("/")[-1],
+            project_config=ProjectConfig(DBT_PROJECT_DIR),
+            profile_config=ProfileConfig(
+                profile_name="enem",
+                target_name="dev",
+                profiles_yml_filepath=DBT_PROJECT_DIR / "profiles.yml",
+            ),
+            execution_config=ExecutionConfig(dbt_executable_path="/opt/airflow/dbt_venv/bin/dbt"),
+            # Tests that read two models (the dictionary check, relationships) run once both are built.
+            render_config=RenderConfig(select=[f"path:{path}"], should_detach_multiple_parents_tests=True),
+        )
 
-    load.expand(landed=land.expand(source=SOURCES)) >> staging
+    load.expand(landed=land.expand(source=SOURCES)) >> dbt_layer("models/staging") >> dbt_layer("models/marts")
 
 
 enem_medallion()

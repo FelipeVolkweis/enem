@@ -14,10 +14,20 @@ models:
     staging:
       +schema: staging
       +materialized: table
+    # Gold: the ENEM + Censo Escolar fact constellation (star schemas sharing dim_data/dim_aluno/dim_escola), in iceberg.marts.
+    marts:
+      +schema: marts
+      +materialized: table
     # dbt_smoke_test fixtures, kept apart from the ENEM data (schema enem_dw).
     smoke:
       +materialized: view
       +tags: [smoke]
+
+vars:
+  # Date each edition is filed under in dim_data: ENEM's first exam day and the Censo Escolar
+  # reference date (last Wednesday of May).
+  enem_data_prova: {2019: "2019-11-03", 2024: "2024-11-03"}
+  censo_data_referencia: {2019: "2019-05-29", 2024: "2024-05-29"}
 
 seeds:
   enem:

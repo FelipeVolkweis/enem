@@ -1,0 +1,138 @@
+version: 2
+
+# Gold layer: the ENEM + Censo Escolar fact constellation. Three stars share dim_data, dim_aluno and
+# dim_escola. Keys are deterministic xxhash64 surrogates (see the surrogate_key macro), except
+# chave_data, which is the date as yyyymmdd.
+
+models:
+  # Conformed dimensions
+  - name: dim_data
+    description: Calendar covering every year an ENEM edition or Censo Escolar is filed under.
+    columns:
+      - name: chave_data
+        description: The date as yyyymmdd.
+        data_tests: [unique, not_null]
+
+  - name: dim_aluno
+    description: One row per ENEM participation (a participant in one edition).
+    columns:
+      - name: chave_aluno
+        data_tests: [unique, not_null]
+      - name: nu_sequencial
+        description: ENEM registration number (NU_INSCRICAO); the microdata has no NU_SEQUENCIAL column.
+
+  - name: dim_escola
+    description: >
+      Schools seen in ENEM (as a participant's school) or in the Censo Escolar, keyed by INEP code.
+      *_esc columns come from ENEM, the rest from the census, each from its latest year.
+      chave_escola = -1 is the "no school informed" member.
+    columns:
+      - name: chave_escola
+        data_tests: [unique, not_null]
+      - name: co_escola
+        description: INEP school code from either source; NULL only on the -1 row.
+      - name: co_entidade
+        description: INEP school code when the school is in the Censo Escolar, else NULL.
+
+  # Censo Escolar dimensions
+  - name: dim_localizacao
+    description: One row per municipality with a school in the census; geographic regions are 2024-only.
+    columns:
+      - name: chave_localizacao
+        data_tests: [unique, not_null]
+
+  - name: dim_infraestrutura
+    description: Junk dimension of the distinct infrastructure-indicator combinations.
+    columns:
+      - name: chave_infraestrutura
+        data_tests: [unique, not_null]
+
+  - name: dim_tecnologia
+    description: Junk dimension of the distinct technology-indicator combinations.
+    columns:
+      - name: chave_tecnologia
+        data_tests: [unique, not_null]
+
+  - name: dim_profissionais
+    description: Junk dimension of the distinct staff-presence combinations.
+    columns:
+      - name: chave_profissionais
+        data_tests: [unique, not_null]
+
+  # Questionnaire dimension
+  - name: dim_questionario
+    description: Socioeconomic questionnaire answer options per (edition, question, option).
+    columns:
+      - name: chave_questionario
+        data_tests: [unique, not_null]
+
+  # Facts
+  - name: fato_desempenho_enem
+    description: "Grain: one participant in one ENEM edition. Attendance, booklet codes and scores."
+    columns:
+      - name: chave_aluno
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_aluno'), field: chave_aluno}
+      - name: chave_data
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_data'), field: chave_data}
+      - name: chave_escola
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_escola'), field: chave_escola}
+
+  - name: fato_censo_escolar
+    description: "Grain: one school in one Censo Escolar year. Counts of devices, staff, enrollments, teachers and classes."
+    data_tests:
+      - unique:
+          column_name: "cast(chave_escola as varchar) || '|' || cast(chave_data as varchar)"
+    columns:
+      - name: chave_escola
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_escola'), field: chave_escola}
+      - name: chave_data
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_data'), field: chave_data}
+      - name: chave_localizacao
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_localizacao'), field: chave_localizacao}
+      - name: chave_infraestrutura
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_infraestrutura'), field: chave_infraestrutura}
+      - name: chave_tecnologia
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_tecnologia'), field: chave_tecnologia}
+      - name: chave_profissionais
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_profissionais'), field: chave_profissionais}
+
+  - name: fato_questionario
+    description: >
+      Grain: one participant's answer to one questionnaire question in one ENEM edition
+      (qt_resposta = 1). Its aluno/escola/data keys are built exactly like fato_desempenho_enem's,
+      so only the questionnaire key gets a relationships test; the others would each be a join over
+      ~200M rows.
+    columns:
+      - name: chave_questionario
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_questionario'), field: chave_questionario}
