@@ -36,6 +36,6 @@ select
 from {{ ref('int_censo_escolar__escolas_ativas') }} c
 join {{ ref('dim_escola') }} e on e.co_escola = c.co_entidade
 join {{ ref('dim_localizacao') }} l on l.co_municipio = c.co_municipio
-{{ join_junk_dimension('dim_infraestrutura', 'i', infraestrutura_columns(), 'c') }}
-{{ join_junk_dimension('dim_tecnologia', 't', tecnologia_columns(), 'c') }}
-{{ join_junk_dimension('dim_profissionais', 'pr', profissionais_columns(), 'c') }}
+{{ join_junk_dimension('dim_infraestrutura', 'i', var('infraestrutura_columns'), 'c') }}
+{{ join_junk_dimension('dim_tecnologia', 't', var('tecnologia_columns'), 'c') }}
+{{ join_junk_dimension('dim_profissionais', 'pr', var('profissionais_columns'), 'c') }}

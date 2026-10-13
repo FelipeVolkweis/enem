@@ -3,7 +3,7 @@
   NULL codes are stored as 9 (see junk_value).
 #}
 
-{%- set cols = infraestrutura_columns() %}
+{%- set cols = var('infraestrutura_columns') %}
 
 with combinacoes as (
     select distinct
