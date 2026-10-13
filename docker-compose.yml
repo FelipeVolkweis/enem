@@ -137,9 +137,47 @@ services:
       trino:
         condition: service_healthy
 
+  superset:
+    build: ./superset
+    image: enem-superset:6.1.0
+    pull_policy: build
+    container_name: enem-superset
+    mem_limit: ${SUPERSET_MEM_LIMIT}
+    restart: unless-stopped
+    # bootstrap.sh migrates the metadata DB, creates the admin, imports ./superset/dashboards, then serves.
+    entrypoint: ["/app/bootstrap.sh"]
+    ports:
+      - "${SUPERSET_PORT}:8088"
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD}
+      # One gunicorn worker (the stock default) keeps it within SUPERSET_MEM_LIMIT.
+      SERVER_WORKER_AMOUNT: "1"
+      # Dashboard queries can wait in Trino's one-at-a-time queue behind a dbt run.
+      GUNICORN_TIMEOUT: "300"
+      SUPERSET_WEBSERVER_TIMEOUT: "300"
+    volumes:
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./superset/bootstrap.sh:/app/bootstrap.sh:ro
+      - ./superset/dashboards:/app/dashboards:ro
+      - superset_home:/app/superset_home
+    networks:
+      - lakehouse-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8088/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    depends_on:
+      trino:
+        condition: service_healthy
+
 volumes:
   minio_data:
   iceberg_data:
+  superset_home:
 
 networks:
   lakehouse-net:

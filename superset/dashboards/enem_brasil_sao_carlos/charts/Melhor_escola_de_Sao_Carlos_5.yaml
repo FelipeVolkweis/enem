@@ -1,0 +1,36 @@
+slice_name: "Melhor escola de S\xE3o Carlos"
+description: "Maior m\xE9dia geral entre as escolas com pelo menos 5 participantes\
+  \ presentes nos dois dias."
+certified_by: null
+certification_details: null
+viz_type: table
+params:
+  viz_type: table
+  datasource: 2__table
+  query_mode: raw
+  all_columns:
+  - no_escola
+  - no_dependencia_adm
+  - qt_participantes
+  - media_geral
+  row_limit: 10
+  include_search: false
+  server_pagination: false
+  show_cell_bars: false
+  time_range: No filter
+  column_config:
+    media_geral:
+      d3NumberFormat: ',.1f'
+    qt_participantes:
+      d3NumberFormat: ',d'
+  adhoc_filters:
+  - expressionType: SIMPLE
+    clause: WHERE
+    subject: posicao
+    operator: ==
+    comparator: 1
+query_context: null
+cache_timeout: null
+uuid: db85af64-2c2a-4717-8957-fc519af64a35
+version: 1.0.0
+dataset_uuid: 1ebf892d-6f4c-4665-bf4b-d3136c369143

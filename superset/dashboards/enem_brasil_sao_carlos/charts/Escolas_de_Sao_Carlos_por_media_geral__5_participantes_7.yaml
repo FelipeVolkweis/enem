@@ -1,0 +1,32 @@
+slice_name: "Escolas de S\xE3o Carlos por m\xE9dia geral (\u2265 5 participantes)"
+description: null
+certified_by: null
+certification_details: null
+viz_type: echarts_timeseries_bar
+params:
+  viz_type: echarts_timeseries_bar
+  datasource: 2__table
+  x_axis: no_escola
+  metrics:
+  - media_geral_escola
+  groupby: []
+  adhoc_filters:
+  - expressionType: SIMPLE
+    clause: WHERE
+    subject: qt_participantes
+    operator: '>='
+    comparator: 5
+  x_axis_sort: media_geral_escola
+  x_axis_sort_asc: true
+  orientation: horizontal
+  show_value: true
+  show_legend: false
+  y_axis_format: ',.0f'
+  row_limit: 200
+  time_range: No filter
+  color_scheme: supersetColors
+query_context: null
+cache_timeout: null
+uuid: e02131ef-be20-440b-9915-735b54b13eef
+version: 1.0.0
+dataset_uuid: 1ebf892d-6f4c-4665-bf4b-d3136c369143

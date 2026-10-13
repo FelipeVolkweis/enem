@@ -1,0 +1,150 @@
+table_name: enem_brasil_vs_sao_carlos
+main_dttm_col: null
+currency_code_column: null
+description: "ENEM averages, Brasil vs schools of S\xE3o Carlos-SP, per edition and\
+  \ area."
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: iceberg
+schema: marts
+sql: "-- National vs S\xE3o Carlos (schools in S\xE3o Carlos-SP, IBGE 3548906) rows\
+  \ of the school aggregate.\n-- Combine rows with the `media` metric: sum(soma_notas)\
+  \ / sum(qt_participantes).\nselect 'Brasil' as recorte, ano, ordem_area, co_area,\
+  \ no_area, qt_participantes, soma_notas\nfrom iceberg.marts.agg_desempenho_enem_escola\n\
+  union all\nselect 'S\xE3o Carlos' as recorte, ano, ordem_area, co_area, no_area,\
+  \ qt_participantes, soma_notas\nfrom iceberg.marts.agg_desempenho_enem_escola\n\
+  where co_municipio = 3548906"
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+folders: null
+uuid: d051a9fd-cddb-4c26-b178-3cc15d24ae66
+metrics:
+- metric_name: diferenca_sao_carlos
+  verbose_name: "S\xE3o Carlos \u2212 Brasil"
+  metric_type: null
+  expression: "SUM(IF(recorte = 'S\xE3o Carlos', soma_notas)) / SUM(IF(recorte = 'S\xE3\
+    o Carlos', qt_participantes)) - SUM(IF(recorte = 'Brasil', soma_notas)) / SUM(IF(recorte\
+    \ = 'Brasil', qt_participantes))"
+  description: null
+  d3format: +,.1f
+  currency: null
+  extra: null
+  warning_text: null
+- metric_name: media
+  verbose_name: "M\xE9dia"
+  metric_type: null
+  expression: SUM(soma_notas) / SUM(qt_participantes)
+  description: null
+  d3format: ',.1f'
+  currency: null
+  extra: null
+  warning_text: null
+- metric_name: participantes
+  verbose_name: Participantes
+  metric_type: null
+  expression: SUM(qt_participantes)
+  description: null
+  d3format: ',d'
+  currency: null
+  extra: null
+  warning_text: null
+columns:
+- column_name: recorte
+  verbose_name: Recorte
+  is_dttm: false
+  is_active: true
+  type: VARCHAR(10)
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: no_area
+  verbose_name: "\xC1rea"
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: ano
+  verbose_name: "Edi\xE7\xE3o"
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: qt_participantes
+  verbose_name: Participantes
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: co_area
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: soma_notas
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: DOUBLE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: ordem_area
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+version: 1.0.0
+database_uuid: 61b6c8b4-2412-41cb-9f82-c97e6cb7eecd

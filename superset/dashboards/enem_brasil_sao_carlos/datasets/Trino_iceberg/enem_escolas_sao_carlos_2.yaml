@@ -1,0 +1,217 @@
+table_name: enem_escolas_sao_carlos
+main_dttm_col: null
+currency_code_column: null
+description: "ENEM averages per S\xE3o Carlos-SP school and edition."
+default_endpoint: null
+offset: 0
+cache_timeout: null
+catalog: iceberg
+schema: marts
+sql: "-- One row per S\xE3o Carlos-SP school (IBGE 3548906) and ENEM edition, its\
+  \ averages per area.\n-- qt_participantes counts participants present on both days\
+  \ (those in media_geral). posicao ranks the schools\n-- with at least 5 of them\
+  \ by media_geral (1 = best), posicao_inversa the other way (1 = worst).\nwith escolas\
+  \ as (\nselect\n    ano,\n    co_escola,\n    if(no_escola = 'N\xC3O INFORMADO',\
+  \ 'Escola INEP ' || cast(co_escola as varchar), no_escola) as no_escola,\n    no_dependencia_adm,\n\
+  \    coalesce(max(if(co_area = 'media_geral', qt_participantes)), 0) as qt_participantes,\n\
+  \    max(if(co_area = 'media_geral', media_nota)) as media_geral,\n    max(if(co_area\
+  \ = 'cn', media_nota)) as media_cn,\n    max(if(co_area = 'ch', media_nota)) as\
+  \ media_ch,\n    max(if(co_area = 'lc', media_nota)) as media_lc,\n    max(if(co_area\
+  \ = 'mt', media_nota)) as media_mt,\n    max(if(co_area = 'redacao', media_nota))\
+  \ as media_redacao\nfrom iceberg.marts.agg_desempenho_enem_escola\nwhere co_municipio\
+  \ = 3548906\ngroup by 1, 2, 3, 4\n)\n\nselect\n    *,\n    if(qt_participantes >=\
+  \ 5, rank() over (partition by ano, qt_participantes >= 5 order by media_geral desc))\n\
+  \        as posicao,\n    if(qt_participantes >= 5, rank() over (partition by ano,\
+  \ qt_participantes >= 5 order by media_geral asc))\n        as posicao_inversa\n\
+  from escolas"
+params: null
+template_params: null
+filter_select_enabled: true
+fetch_values_predicate: null
+extra: null
+normalize_columns: false
+always_filter_main_dttm: false
+folders: null
+uuid: 1ebf892d-6f4c-4665-bf4b-d3136c369143
+metrics:
+- metric_name: media_geral_escola
+  verbose_name: "M\xE9dia geral"
+  metric_type: null
+  expression: MAX(media_geral)
+  description: null
+  d3format: ',.1f'
+  currency: null
+  extra: null
+  warning_text: null
+columns:
+- column_name: media_lc
+  verbose_name: "Linguagens e C\xF3digos"
+  is_dttm: false
+  is_active: true
+  type: DOUBLE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: media_cn
+  verbose_name: "Ci\xEAncias da Natureza"
+  is_dttm: false
+  is_active: true
+  type: DOUBLE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: media_ch
+  verbose_name: "Ci\xEAncias Humanas"
+  is_dttm: false
+  is_active: true
+  type: DOUBLE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: media_geral
+  verbose_name: "M\xE9dia geral"
+  is_dttm: false
+  is_active: true
+  type: DOUBLE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: no_escola
+  verbose_name: Escola
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: no_dependencia_adm
+  verbose_name: Rede
+  is_dttm: false
+  is_active: true
+  type: VARCHAR
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: media_mt
+  verbose_name: "Matem\xE1tica"
+  is_dttm: false
+  is_active: true
+  type: DOUBLE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: media_redacao
+  verbose_name: "Reda\xE7\xE3o"
+  is_dttm: false
+  is_active: true
+  type: DOUBLE
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: ano
+  verbose_name: "Edi\xE7\xE3o"
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: qt_participantes
+  verbose_name: Participantes
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: posicao
+  verbose_name: "Posi\xE7\xE3o"
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: posicao_inversa
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: BIGINT
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+- column_name: co_escola
+  verbose_name: null
+  is_dttm: false
+  is_active: true
+  type: INTEGER
+  advanced_data_type: null
+  groupby: true
+  filterable: true
+  expression: null
+  description: null
+  python_date_format: null
+  datetime_format: null
+  extra: null
+version: 1.0.0
+database_uuid: 61b6c8b4-2412-41cb-9f82-c97e6cb7eecd

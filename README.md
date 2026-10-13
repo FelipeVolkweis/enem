@@ -1,6 +1,6 @@
 # ENEM Lakehouse & Data Warehouse Infrastructure
 
-A containerized local lakehouse running **Apache Airflow 3.3.2** + **Astronomer Cosmos** orchestrating **dbt** on **Trino**, with tables stored as **Apache Iceberg** (REST catalog) on **MinIO**.
+A containerized local lakehouse running **Apache Airflow 3.3.2** + **Astronomer Cosmos** orchestrating **dbt** on **Trino**, with tables stored as **Apache Iceberg** (REST catalog) on **MinIO**, and **Apache Superset** dashboards on top.
 
 Designed for developing local data pipelines and analytical workloads on datasets such as Brazilian ENEM (Exame Nacional do Ensino Médio) microdata.
 
@@ -14,9 +14,10 @@ Designed for developing local data pipelines and analytical workloads on dataset
 | **Trino** | `enem-trino` | `trinodb/trino:483` | SQL engine for dbt; Iceberg connector pointed at the REST catalog | `8085` |
 | **Iceberg Catalog** | `enem-iceberg-rest` | `apache/iceberg-rest-fixture:1.10.1` | Iceberg REST catalog (SQLite-backed, persisted in a volume) | `8181` |
 | **Object Store** | `enem-minio` | `cgr.dev/chainguard/minio:latest` | S3-compatible storage for Iceberg data/metadata | `9000` (S3), `9001` (console) |
+| **Dashboards** | `enem-superset` | `apache/superset:6.1.0` + Trino driver | BI on the gold layer; dashboards versioned in git and imported on boot | `8088` |
 | **Bucket Provisioner** | `enem-minio-init` | `cgr.dev/chainguard/minio-client:latest` | Creates the `warehouse` bucket on boot | — |
 
-Every service uses an upstream image. The only image built locally is a three-line extension of the official Airflow image. It installs `astronomer-cosmos` and puts `dbt-trino` in a separate venv (`/opt/airflow/dbt_venv`), which is the layout Cosmos recommends to keep dbt's dependencies apart from Airflow's.
+Every service uses an upstream image. Two images are built locally, both thin extensions of the official ones: Superset's adds the `trino` driver, and Airflow's is described next. It installs `astronomer-cosmos` and puts `dbt-trino` in a separate venv (`/opt/airflow/dbt_venv`), which is the layout Cosmos recommends to keep dbt's dependencies apart from Airflow's.
 
 ---
 
@@ -29,6 +30,11 @@ Every service uses an upstream image. The only image built locally is a three-li
 ├── airflow/
 │   ├── Dockerfile               # FROM apache/airflow + Cosmos + dbt venv
 │   └── requirements.txt
+├── superset/
+│   ├── Dockerfile               # FROM apache/superset + trino driver
+│   ├── superset_config.py       # SQLite metadata DB, 1-day chart cache
+│   ├── bootstrap.sh             # entrypoint: migrate, admin user, import dashboards, serve
+│   └── dashboards/              # unzipped Superset exports, imported on every boot
 ├── trino/
 │   ├── catalog/iceberg.properties  # Trino → Iceberg REST + MinIO
 │   └── etc/                     # small-host tuning: lazy heap, 1 query at a time, spill
@@ -67,6 +73,7 @@ docker compose up -d --build
 | **Trino UI** | <http://localhost:8085> | any username |
 | **MinIO Console** | <http://localhost:9001> | `admin` / `password123` |
 | **Iceberg REST API** | <http://localhost:8181/v1/config> | none |
+| **Superset** | <http://localhost:8088> | `admin` / `admin` |
 
 ---
 
@@ -87,7 +94,7 @@ docker exec enem-airflow airflow dags trigger enem_medallion
 docker exec -it enem-trino trino --execute "select nu_ano, count(*) from iceberg.staging.stg_enem__participantes group by 1"
 ```
 
-Sized for an 8 GB machine: every container has a memory cap in `.env` (`TRINO_MEM_LIMIT=1536m`, `AIRFLOW_MEM_LIMIT=1536m`, `MINIO_MEM_LIMIT=512m`, `ICEBERG_REST_MEM_LIMIT=384m`, about 3.9 GB in total), and the stack never takes more than their sum. Trino is tuned for that cap in `trino/etc/`. `jvm.config` starts the heap at 10% of the cap instead of 80%, so idle Trino doesn't hold most of its cap. `resource-groups.json` runs one query at a time and queues the rest, whether they come from dbt threads, Airflow tasks or the CLI, so `config.properties` can give that query 700MB. The same file limits parallelism to 4 threads and 2 Parquet writers, since scans and writes can't spill, and turns on spill-to-disk for joins and aggregations. Keep `TRINO_MEM_LIMIT` at 1.2g or more, or that 700MB no longer fits and Trino won't start. Airflow runs with `core.parallelism=2` (2 LocalExecutor workers instead of 32), and the bronze load buffers 100k rows per write. dbt uses 2 threads. Apply a changed cap with `docker compose up -d`. Note that recreating the Airflow container resets `airflow standalone`'s SQLite metadata DB (run history), but not the warehouse.
+Sized for an 8 GB machine: every container has a memory cap in `.env` (`TRINO_MEM_LIMIT=1536m`, `AIRFLOW_MEM_LIMIT=1536m`, `MINIO_MEM_LIMIT=512m`, `ICEBERG_REST_MEM_LIMIT=384m`, `SUPERSET_MEM_LIMIT=1g`, about 4.9 GB in total), and the stack never takes more than their sum. Trino is tuned for that cap in `trino/etc/`. `jvm.config` starts the heap at 10% of the cap instead of 80%, so idle Trino doesn't hold most of its cap. `resource-groups.json` runs one query at a time and queues the rest, whether they come from dbt threads, Airflow tasks or the CLI, so `config.properties` can give that query 700MB. The same file limits parallelism to 4 threads and 2 Parquet writers, since scans and writes can't spill, and turns on spill-to-disk for joins and aggregations. Keep `TRINO_MEM_LIMIT` at 1.2g or more, or that 700MB no longer fits and Trino won't start. Airflow runs with `core.parallelism=2` (2 LocalExecutor workers instead of 32), and the bronze load buffers 100k rows per write. dbt uses 2 threads. Apply a changed cap with `docker compose up -d`. Note that recreating the Airflow container resets `airflow standalone`'s SQLite metadata DB (run history), but not the warehouse.
 
 ---
 
@@ -115,6 +122,24 @@ docker exec -it enem-trino trino --execute "
   join iceberg.marts.dim_data d using (chave_data) join iceberg.marts.dim_escola e using (chave_escola)
   where f.chave_escola <> 0 and f.tp_presenca_mt = 1 group by 1, 2 order by 1, 2"
 ```
+
+`agg_desempenho_enem_escola` aggregates `fato_desempenho_enem` for dashboards: one row per school × edition × area (`cn`, `ch`, `lc`, `mt`, `redacao`, and `media_geral`, the plain average of the five scores for participants present on both days), counting only present participants. `chave_escola = 0` holds participants who informed no school, so summing every row gives national figures. Combine rows with `sum(soma_notas) / sum(qt_participantes)`, never by averaging `media_nota`.
+
+---
+
+## 📊 Dashboards (Superset)
+
+<http://localhost:8088> (`admin` / `admin`). The Trino connection (`trino://superset@trino:8080/iceberg`), datasets, charts and dashboards come from `superset/dashboards/`. `bootstrap.sh` imports them on every container start and overwrites the copies in Superset's metadata DB, so git is the source of truth.
+
+**ENEM — Brasil × São Carlos** (`/superset/dashboard/enem-brasil-sao-carlos/`), with an *Edição do ENEM* filter (2019 / 2024, default 2024):
+
+- Average overall score (*média geral*), Brazil vs São Carlos, and the difference between them.
+- Average per area (CN, CH, LC, MT, Redação), Brazil vs São Carlos.
+- Best and worst São Carlos school by overall average, plus all schools ranked.
+
+"São Carlos" means participants whose **school** is in São Carlos-SP (IBGE `3548906`). The gold layer locates participants only through their school. Participants who informed no school count toward Brazil only, and few participants informed a school in 2019. The best/worst school only considers schools with at least 5 participants present on both days, so a single student can't decide it. This threshold is set in the `enem_escolas_sao_carlos` dataset (`posicao` / `posicao_inversa`).
+
+Changing a dashboard: edit it in the UI, export it (*Dashboards → select → Export*), unzip the export over its folder in `superset/dashboards/` (dropping the zip's top-level folder), and commit. Charts in `position` must keep their `uuid`, which is how the import links layout slots to charts. Chart results are cached for a day (`superset_config.py`). After an `enem_medallion` run, use *Refresh dashboard* or restart the container.
 
 ---
 
@@ -146,5 +171,5 @@ docker exec -it -w /opt/airflow/dbt enem-airflow /opt/airflow/dbt_venv/bin/dbt b
 
 ```bash
 docker compose down      # keep data
-docker compose down -v   # also wipe MinIO data and the Iceberg catalog
+docker compose down -v   # also wipe MinIO data, the Iceberg catalog and Superset's metadata DB
 ```

@@ -1,0 +1,30 @@
+slice_name: "M\xE9dia geral \u2014 S\xE3o Carlos"
+description: null
+certified_by: null
+certification_details: null
+viz_type: big_number_total
+params:
+  viz_type: big_number_total
+  datasource: 1__table
+  header_font_size: 0.3
+  subheader_font_size: 0.125
+  y_axis_format: ',.1f'
+  time_range: No filter
+  metric: media
+  subheader: pontos
+  adhoc_filters:
+  - expressionType: SIMPLE
+    clause: WHERE
+    subject: recorte
+    operator: ==
+    comparator: "S\xE3o Carlos"
+  - expressionType: SIMPLE
+    clause: WHERE
+    subject: co_area
+    operator: ==
+    comparator: media_geral
+query_context: null
+cache_timeout: null
+uuid: 2ad2c0e8-d15b-414b-a505-bedd0e301063
+version: 1.0.0
+dataset_uuid: d051a9fd-cddb-4c26-b178-3cc15d24ae66
