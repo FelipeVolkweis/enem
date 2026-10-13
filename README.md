@@ -98,11 +98,13 @@ A fact constellation: three star schemas sharing `dim_data`, `dim_aluno` and `di
 | :--- | :--- | :--- |
 | `fato_desempenho_enem` | participant × ENEM edition | aluno, data, escola |
 | `fato_questionario` | participant × question answered × edition (`qt_resposta` = 1) | aluno, escola, data, questionario |
-| `fato_censo_escolar` | school × census year | escola, data, localizacao, infraestrutura, tecnologia, profissionais |
+| `fato_censo_escolar` | active school (`tp_situacao_funcionamento = 1`) × census year | escola, data, localizacao, infraestrutura, tecnologia, profissionais |
 
-- Keys are deterministic xxhash64 hashes of the natural key (`surrogate_key` macro), so facts never join back to dimensions. `chave_data` is `yyyymmdd`.
+- Keys are sequential positive `integer`s ordered by the natural key (`sequential_key` macro), and facts look them up by natural key. `0` is the unknown member, and `chave_data` is `yyyymmdd`.
+- NULLs: dimensions never hold one. Codes (`tp_`/`in_`) use `9`, INEP's own "não sabe / não informado" code, here also meaning "não se aplica" (e.g. `tp_categoria_escola_privada` of a public school). Identifiers use `0` and names `'NÃO INFORMADO'`. Fact measures stay NULL when INEP didn't measure them (absent participant, blank census count), so `avg()` stays correct.
+- `fato_censo_escolar` keeps only active schools, because INEP 2024 publishes no details for paralisadas/extintas. They still appear in `dim_escola`.
 - An edition is filed under ENEM's first exam day or the census reference date (`enem_data_prova` / `censo_data_referencia` vars in `dbt_project.yml`).
-- `dim_escola` merges ENEM's `*_esc` attributes with the census attributes (latest year of each). `chave_escola = -1` is the "no school informed" row most participants point to.
+- `dim_escola` merges ENEM's `*_esc` attributes with the census attributes, and each side fills in for the other, using the latest non-NULL year. `chave_escola = 0` is the "no school informed" row most participants point to.
 - `dim_infraestrutura`, `dim_tecnologia` and `dim_profissionais` are junk dimensions: one row per distinct combination of their indicators.
 - `dim_aluno.nu_sequencial` holds `NU_INSCRICAO`, since the microdata has no `NU_SEQUENCIAL`. `dim_localizacao`'s intermediate/immediate geographic regions exist only in the 2024 census.
 
@@ -110,7 +112,7 @@ A fact constellation: three star schemas sharing `dim_data`, `dim_aluno` and `di
 docker exec -it enem-trino trino --execute "
   select d.ano, e.sg_uf_esc, avg(f.nu_nota_mt) from iceberg.marts.fato_desempenho_enem f
   join iceberg.marts.dim_data d using (chave_data) join iceberg.marts.dim_escola e using (chave_escola)
-  where f.chave_escola <> -1 group by 1, 2 order by 1, 2"
+  where f.chave_escola <> 0 group by 1, 2 order by 1, 2"
 ```
 
 ---

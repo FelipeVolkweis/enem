@@ -1,13 +1,16 @@
 version: 2
 
 # Gold layer: the ENEM + Censo Escolar fact constellation. Three stars share dim_data, dim_aluno and
-# dim_escola. Keys are deterministic xxhash64 surrogates (see the surrogate_key macro), except
-# chave_data, which is the date as yyyymmdd.
+# dim_escola. Keys are sequential positive integers ordered by the natural key (0 = unknown member),
+# except chave_data, which is the date as yyyymmdd. Dimensions never hold NULLs: codes use 9
+# ("não informado / não se aplica"), identifiers 0 and names 'NÃO INFORMADO'. Fact measures stay
+# NULL when INEP did not measure them (absent participant, blank census count).
 
 models:
   # Conformed dimensions
   - name: dim_data
     description: Calendar covering every year an ENEM edition or Censo Escolar is filed under.
+    data_tests: [no_null_columns]
     columns:
       - name: chave_data
         description: The date as yyyymmdd.
@@ -15,6 +18,7 @@ models:
 
   - name: dim_aluno
     description: One row per ENEM participation (a participant in one edition).
+    data_tests: [no_null_columns]
     columns:
       - name: chave_aluno
         data_tests: [unique, not_null]
@@ -23,38 +27,43 @@ models:
 
   - name: dim_escola
     description: >
-      Schools seen in ENEM (as a participant's school) or in the Censo Escolar, keyed by INEP code.
-      *_esc columns come from ENEM, the rest from the census, each from its latest year.
-      chave_escola = -1 is the "no school informed" member.
+      Schools seen in ENEM (as a participant's school) or in the Censo Escolar, one row per INEP code.
+      *_esc columns are ENEM's view, the rest the census's; each fills in for the other where the
+      school is missing from one source. chave_escola = 0 is the "no school informed" member.
+    data_tests: [no_null_columns]
     columns:
       - name: chave_escola
         data_tests: [unique, not_null]
       - name: co_escola
-        description: INEP school code from either source; NULL only on the -1 row.
+        description: INEP school code (0 on the unknown member).
       - name: co_entidade
-        description: INEP school code when the school is in the Censo Escolar, else NULL.
+        description: Same INEP code, under the census's name for it.
 
   # Censo Escolar dimensions
   - name: dim_localizacao
-    description: One row per municipality with a school in the census; geographic regions are 2024-only.
+    description: One row per municipality with a school in the census; geographic regions are 2024-only (0 / 'NÃO INFORMADO' otherwise).
+    data_tests: [no_null_columns]
     columns:
       - name: chave_localizacao
         data_tests: [unique, not_null]
 
   - name: dim_infraestrutura
     description: Junk dimension of the distinct infrastructure-indicator combinations.
+    data_tests: [no_null_columns]
     columns:
       - name: chave_infraestrutura
         data_tests: [unique, not_null]
 
   - name: dim_tecnologia
     description: Junk dimension of the distinct technology-indicator combinations.
+    data_tests: [no_null_columns]
     columns:
       - name: chave_tecnologia
         data_tests: [unique, not_null]
 
   - name: dim_profissionais
     description: Junk dimension of the distinct staff-presence combinations.
+    data_tests: [no_null_columns]
     columns:
       - name: chave_profissionais
         data_tests: [unique, not_null]
@@ -62,6 +71,7 @@ models:
   # Questionnaire dimension
   - name: dim_questionario
     description: Socioeconomic questionnaire answer options per (edition, question, option).
+    data_tests: [no_null_columns]
     columns:
       - name: chave_questionario
         data_tests: [unique, not_null]
@@ -88,7 +98,7 @@ models:
               arguments: {to: ref('dim_escola'), field: chave_escola}
 
   - name: fato_censo_escolar
-    description: "Grain: one school in one Censo Escolar year. Counts of devices, staff, enrollments, teachers and classes."
+    description: "Grain: one active school (tp_situacao_funcionamento = 1) in one Censo Escolar year. Counts of devices, staff, enrollments, teachers and classes."
     data_tests:
       - unique:
           column_name: "cast(chave_escola as varchar) || '|' || cast(chave_data as varchar)"
@@ -127,9 +137,8 @@ models:
   - name: fato_questionario
     description: >
       Grain: one participant's answer to one questionnaire question in one ENEM edition
-      (qt_resposta = 1). Its aluno/escola/data keys are built exactly like fato_desempenho_enem's,
-      so only the questionnaire key gets a relationships test; the others would each be a join over
-      ~200M rows.
+      (qt_resposta = 1). Its aluno/escola keys are looked up exactly like fato_desempenho_enem's, so
+      only the questionnaire key gets a relationships test; the others would each join ~55M rows.
     columns:
       - name: chave_questionario
         data_tests:

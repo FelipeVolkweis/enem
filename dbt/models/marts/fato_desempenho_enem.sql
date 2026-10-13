@@ -1,24 +1,29 @@
 {{ config(properties={"partitioning": "ARRAY['chave_data']"}) }}
 
-{# Grain: one participant in one ENEM edition. #}
+{#
+  Grain: one participant in one ENEM edition. Scores stay NULL when the participant was absent
+  (see tp_presenca_*), so avg() covers only those who sat the exam.
+#}
 
 select
-    {{ surrogate_key(['nu_inscricao']) }} as chave_aluno,
-    {{ edition_date_key('nu_ano', 'enem_data_prova') }} as chave_data,
-    {{ escola_key('co_escola') }} as chave_escola,
+    a.chave_aluno,
+    {{ edition_date_key('p.nu_ano', 'enem_data_prova') }} as chave_data,
+    coalesce(e.chave_escola, 0) as chave_escola,
 
     {% for area in ['cn', 'ch', 'lc', 'mt'] -%}
-    tp_presenca_{{ area }},
+    p.tp_presenca_{{ area }},
     {% endfor -%}
     {% for area in ['cn', 'ch', 'lc', 'mt'] -%}
-    co_prova_{{ area }},
+    p.co_prova_{{ area }},
     {% endfor -%}
     {% for area in ['cn', 'ch', 'lc', 'mt'] -%}
-    nu_nota_{{ area }},
+    p.nu_nota_{{ area }},
     {% endfor -%}
-    tp_status_redacao,
+    p.tp_status_redacao,
     {% for i in range(1, 6) -%}
-    nu_nota_comp{{ i }},
+    p.nu_nota_comp{{ i }},
     {% endfor -%}
-    nu_nota_redacao
-from {{ ref('stg_enem__participantes') }}
+    p.nu_nota_redacao
+from {{ ref('stg_enem__participantes') }} p
+join {{ ref('dim_aluno') }} a on a.nu_sequencial = p.nu_inscricao
+left join {{ ref('dim_escola') }} e on e.co_escola = p.co_escola

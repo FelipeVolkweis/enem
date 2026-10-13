@@ -4,7 +4,7 @@
 #}
 
 select
-    {{ surrogate_key(['nu_inscricao']) }} as chave_aluno,
+    {{ sequential_key(['nu_inscricao']) }} as chave_aluno,
     nu_inscricao as nu_sequencial,
-    tp_lingua
+    {{ code_or_unknown('tp_lingua') }} as tp_lingua
 from {{ ref('stg_enem__participantes') }}

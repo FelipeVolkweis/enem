@@ -1,10 +1,10 @@
 {#
   One row per (edition, question, answer option) of the socioeconomic questionnaire. The q-codes
-  change meaning between editions, so the edition is part of the key.
+  change meaning between editions, so the edition is part of the natural key.
 #}
 
 select
-    {{ surrogate_key(['nu_ano', 'questao', 'alternativa']) }} as chave_questionario,
+    {{ sequential_key(['nu_ano', 'questao', 'alternativa']) }} as chave_questionario,
     nu_ano as ano,
     questao,
     alternativa as alternativa_questao,
