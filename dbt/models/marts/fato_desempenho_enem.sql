@@ -26,7 +26,6 @@ select
     p.nu_nota_comp{{ i }},
     {% endfor -%}
     p.nu_nota_redacao
-from {{ ref('stg_enem__participantes') }} p
+from {{ ref('int_enem__provas_completas') }} p
 join {{ ref('dim_aluno') }} a on a.nu_sequencial = p.nu_inscricao
 left join {{ ref('dim_escola') }} e on e.co_escola = p.co_escola
-where {{ enem_prova_completa('p') }}

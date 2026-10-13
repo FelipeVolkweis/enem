@@ -18,6 +18,9 @@ models:
     marts:
       +schema: marts
       +materialized: table
+      # Shared row filters (the facts' grains), inlined as CTEs where they are used.
+      intermediate:
+        +materialized: ephemeral
     # dbt_smoke_test fixtures, kept apart from the ENEM data (schema enem_dw).
     smoke:
       +materialized: view

@@ -44,6 +44,7 @@ Every service uses an upstream image. The only image built locally is a three-li
 │       │   ├── enem/
 │       │   └── censo_escolar/
 │       ├── marts/               # gold layer: dim_* / fato_* constellation (schema `marts`)
+│       │   └── intermediate/    # ephemeral int_* filters giving the facts' grains
 │       └── smoke/               # smoke-test fixtures (tag `smoke`, schema `enem_dw`)
 ├── dags/
 │   ├── enem_medallion_dag.py    # bronze load -> Cosmos task groups for staging, then marts

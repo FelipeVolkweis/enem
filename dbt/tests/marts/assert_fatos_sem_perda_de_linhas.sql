@@ -1,8 +1,8 @@
 -- The facts look their keys up with inner joins; none of them may lose source rows on the way.
 with esperado as (
-    select 'fato_desempenho_enem' as fato, count(*) as linhas from {{ ref('stg_enem__participantes') }} p where {{ enem_prova_completa('p') }}
+    select 'fato_desempenho_enem' as fato, count(*) as linhas from {{ ref('int_enem__provas_completas') }}
     union all
-    select 'fato_censo_escolar', count(*) from {{ ref('stg_censo_escolar__escolas') }} where tp_situacao_funcionamento = 1
+    select 'fato_censo_escolar', count(*) from {{ ref('int_censo_escolar__escolas_ativas') }}
     union all
     select 'fato_questionario', count(*)
     from {{ ref('stg_enem__participantes') }}

@@ -33,25 +33,7 @@
     end
 {%- endmacro %}
 
-{#
-  fato_desempenho_enem's grain: present (tp_presenca = 1; absent is 0, eliminated 2) at all four tests,
-  with every score and booklet published, so the fact holds no NULLs.
-#}
-{% macro enem_prova_completa(alias) -%}
-    {%- set required = ['tp_status_redacao', 'nu_nota_comp1', 'nu_nota_comp2', 'nu_nota_comp3',
-                        'nu_nota_comp4', 'nu_nota_comp5', 'nu_nota_redacao'] -%}
-    {%- for area in ['cn', 'ch', 'lc', 'mt'] %}
-    {{ alias }}.tp_presenca_{{ area }} = 1 and {{ alias }}.co_prova_{{ area }} is not null and {{ alias }}.nu_nota_{{ area }} is not null and
-    {%- endfor %}
-    {%- for c in required %}
-    {{ alias }}.{{ c }} is not null{{ ' and' if not loop.last }}
-    {%- endfor %}
-{%- endmacro %}
 
-{# fato_censo_escolar's grain: schools em atividade. INEP 2024 publishes no details for paralisadas/extintas. #}
-{% macro censo_escolas_ativas() -%}
-    (select * from {{ ref('stg_censo_escolar__escolas') }} where tp_situacao_funcionamento = 1)
-{%- endmacro %}
 
 {# Censo Escolar columns grouped into the junk dimensions of fato_censo_escolar. #}
 {% macro infraestrutura_columns() -%}
@@ -102,19 +84,6 @@
     {%- if col.startswith('qt_') -%}{{ ref }}{%- else -%}{{ code_or_unknown(ref) }}{%- endif -%}
 {%- endmacro %}
 
-{# Junk dimension: one row per distinct combination of the given columns among active schools. #}
-{% macro junk_dimension(key_name, cols) -%}
-with combinacoes as (
-    select distinct
-        {%- for c in cols %}
-        {{ junk_value(c) }} as {{ c }}{{ ',' if not loop.last }}
-        {%- endfor %}
-    from {{ censo_escolas_ativas() }}
-)
-
-select {{ sequential_key(cols) }} as {{ key_name }}, *
-from combinacoes
-{%- endmacro %}
 
 {# Join a junk dimension to census rows (alias `alias`) on all of its columns. #}
 {% macro join_junk_dimension(dim, dim_alias, cols, alias) -%}

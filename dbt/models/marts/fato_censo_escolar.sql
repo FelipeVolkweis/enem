@@ -33,7 +33,7 @@ select
     {%- for c in zero_if_blank %}
     coalesce(c.{{ c }}, 0) as {{ c }}{{ ',' if not loop.last }}
     {%- endfor %}
-from {{ censo_escolas_ativas() }} c
+from {{ ref('int_censo_escolar__escolas_ativas') }} c
 join {{ ref('dim_escola') }} e on e.co_escola = c.co_entidade
 join {{ ref('dim_localizacao') }} l on l.co_municipio = c.co_municipio
 {{ join_junk_dimension('dim_infraestrutura', 'i', infraestrutura_columns(), 'c') }}
