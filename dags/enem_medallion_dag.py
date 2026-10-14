@@ -155,7 +155,7 @@ def enem_medallion():
                     flush(txn)
         print(f"loaded {rows} rows into {identifier}")
 
-    def dbt_layer(path: str) -> DbtTaskGroup:
+    def dbt_layer(path: str, exclude: list[str] | None = None) -> DbtTaskGroup:
         return DbtTaskGroup(
             group_id=path.split("/")[-1],
             project_config=ProjectConfig(DBT_PROJECT_DIR),
@@ -166,10 +166,15 @@ def enem_medallion():
             ),
             execution_config=ExecutionConfig(dbt_executable_path="/opt/airflow/dbt_venv/bin/dbt"),
             # Tests that read two models (the dictionary check, relationships) run once both are built.
-            render_config=RenderConfig(select=[f"path:{path}"], should_detach_multiple_parents_tests=True),
+            render_config=RenderConfig(
+                select=[f"path:{path}"], exclude=exclude or [], should_detach_multiple_parents_tests=True
+            ),
         )
 
-    load.expand(landed=land.expand(source=SOURCES)) >> dbt_layer("models/staging") >> dbt_layer("models/marts")
+    # A test lands in every layer that holds one of its parents; the marts tests also read staging models,
+    # so keep them out of the staging layer, where the marts don't exist yet.
+    staging = dbt_layer("models/staging", exclude=["path:tests/marts"])
+    load.expand(landed=land.expand(source=SOURCES)) >> staging >> dbt_layer("models/marts")
 
 
 enem_medallion()
